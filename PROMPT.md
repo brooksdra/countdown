@@ -12,3 +12,5 @@
 - [2023-10-27 10:45:00] ooops, it looks like the timers that are not finished are no longer centered, but left justified.
 - [2023-10-27 10:50:00] Let's focus on the add popup. Pleaes use a caledar selector starting with today and a time picker starting with now
 - [2023-10-27 10:55:00] Please add a delete button on the timer control with an are you sure if the timer is still running.
+- [2023-10-27 11:00:00] Please replace the delete button with an edit button so a user can change any value of the timer with a cancel. Then Move the delete into the edit popup.
+- [2023-10-27 11:05:00] Please add scrolling if there are more timers than fit on one screen

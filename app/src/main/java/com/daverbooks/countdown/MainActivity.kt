@@ -10,10 +10,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,7 +55,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun CountdownApp() {
     var countdowns by remember { mutableStateOf(listOf<Countdown>()) }
-    var showDialog by remember { mutableStateOf(false) }
+    var showAddDialog by remember { mutableStateOf(false) }
+    var editingCountdown by remember { mutableStateOf<Countdown?>(null) }
 
     LaunchedEffect(Unit) {
         val now = LocalDateTime.now()
@@ -69,7 +72,7 @@ fun CountdownApp() {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         floatingActionButton = {
-            FloatingActionButton(onClick = { showDialog = true }) {
+            FloatingActionButton(onClick = { showAddDialog = true }) {
                 Icon(Icons.Default.Add, contentDescription = "Add Countdown")
             }
         }
@@ -87,17 +90,16 @@ fun CountdownApp() {
                 items(countdowns, key = { it.id }) { countdown ->
                     CountdownCard(
                         countdown = countdown,
-                        onDelete = {
-                            countdowns = countdowns.filter { it.id != countdown.id }
-                        }
+                        onEdit = { editingCountdown = countdown }
                     )
                 }
             }
         }
 
-        if (showDialog) {
-            AddCountdownDialog(
-                onDismiss = { showDialog = false },
+        if (showAddDialog) {
+            CountdownDialog(
+                title = "Add New Countdown",
+                onDismiss = { showAddDialog = false },
                 onConfirm = { name, description, dateTime ->
                     val newCountdown = Countdown(
                         id = System.currentTimeMillis(),
@@ -106,7 +108,25 @@ fun CountdownApp() {
                         targetDateTime = dateTime
                     )
                     countdowns = countdowns + newCountdown
-                    showDialog = false
+                    showAddDialog = false
+                }
+            )
+        }
+
+        editingCountdown?.let { countdown ->
+            CountdownDialog(
+                title = "Edit Countdown",
+                initialCountdown = countdown,
+                onDismiss = { editingCountdown = null },
+                onConfirm = { name, description, dateTime ->
+                    countdowns = countdowns.map {
+                        if (it.id == countdown.id) it.copy(name = name, description = description, targetDateTime = dateTime) else it
+                    }
+                    editingCountdown = null
+                },
+                onDelete = {
+                    countdowns = countdowns.filter { it.id != countdown.id }
+                    editingCountdown = null
                 }
             )
         }
@@ -114,9 +134,8 @@ fun CountdownApp() {
 }
 
 @Composable
-fun CountdownCard(countdown: Countdown, onDelete: () -> Unit) {
+fun CountdownCard(countdown: Countdown, onEdit: () -> Unit) {
     var currentTime by remember { mutableStateOf(LocalDateTime.now()) }
-    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -134,16 +153,10 @@ fun CountdownCard(countdown: Countdown, onDelete: () -> Unit) {
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             IconButton(
-                onClick = {
-                    if (isRunning) {
-                        showDeleteConfirm = true
-                    } else {
-                        onDelete()
-                    }
-                },
+                onClick = onEdit,
                 modifier = Modifier.align(Alignment.TopEnd)
             ) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete Countdown")
+                Icon(Icons.Default.Edit, contentDescription = "Edit Countdown")
             }
 
             Column(
@@ -208,27 +221,6 @@ fun CountdownCard(countdown: Countdown, onDelete: () -> Unit) {
             }
         }
     }
-
-    if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete Countdown") },
-            text = { Text("Are you sure you want to delete the running countdown \"${countdown.name}\"?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showDeleteConfirm = false
-                    onDelete()
-                }) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
 }
 
 @Composable
@@ -263,26 +255,30 @@ fun CountdownSeparator() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddCountdownDialog(
+fun CountdownDialog(
+    title: String,
+    initialCountdown: Countdown? = null,
     onDismiss: () -> Unit,
-    onConfirm: (String, String, LocalDateTime) -> Unit
+    onConfirm: (String, String, LocalDateTime) -> Unit,
+    onDelete: (() -> Unit)? = null
 ) {
-    var name by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf(initialCountdown?.name ?: "") }
+    var description by remember { mutableStateOf(initialCountdown?.description ?: "") }
     
-    val now = LocalDateTime.now()
-    var selectedDate by remember { mutableStateOf(now.toLocalDate()) }
-    var selectedTime by remember { mutableStateOf(now.toLocalTime()) }
+    val initialDateTime = initialCountdown?.targetDateTime ?: LocalDateTime.now().plusDays(1)
+    var selectedDate by remember { mutableStateOf(initialDateTime.toLocalDate()) }
+    var selectedTime by remember { mutableStateOf(initialDateTime.toLocalTime()) }
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     val dateFormatter = DateTimeFormatter.ofPattern("MMM dd, yyyy")
     val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add New Countdown") },
+        title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 TextField(
@@ -321,15 +317,58 @@ fun AddCountdownDialog(
             TextButton(onClick = {
                 onConfirm(name, description, LocalDateTime.of(selectedDate, selectedTime))
             }) {
-                Text("Add")
+                Text(if (initialCountdown == null) "Add" else "Save")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (onDelete != null) {
+                    TextButton(onClick = {
+                        val duration = Duration.between(LocalDateTime.now(), initialDateTime)
+                        if (!duration.isNegative) {
+                            showDeleteConfirm = true
+                        } else {
+                            onDelete()
+                        }
+                    }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                        Spacer(Modifier.width(4.dp))
+                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                    }
+                } else {
+                    Spacer(Modifier.width(1.dp)) // Placeholder
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel")
+                }
             }
         }
     )
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete Countdown") },
+            text = { Text("Are you sure you want to delete this running countdown?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    onDelete?.invoke()
+                }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(
