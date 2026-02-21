@@ -123,62 +123,81 @@ fun CountdownApp() {
             }
         }
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
         ) {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(countdowns, key = { it.id }) { countdown ->
-                    val dismissState = rememberSwipeToDismissBoxState(
-                        confirmValueChange = { value ->
-                            if (value == SwipeToDismissBoxValue.EndToStart) {
-                                val isRunning = !Duration.between(LocalDateTime.now(), countdown.targetDateTime).isNegative
-                                if (isRunning) {
-                                    swipedCountdownToDelete = countdown
-                                    false // Don't dismiss yet, wait for confirmation
-                                } else {
-                                    countdowns = countdowns.filter { it.id != countdown.id }
-                                    true
-                                }
-                            } else {
-                                false
-                            }
-                        }
+            if (countdowns.isEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "No countdowns yet.",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-
-                    SwipeToDismissBox(
-                        state = dismissState,
-                        enableDismissFromStartToEnd = false,
-                        backgroundContent = {
-                            val color = when (dismissState.dismissDirection) {
-                                SwipeToDismissBoxValue.EndToStart -> Color.Red
-                                else -> Color.Transparent
+                    Text(
+                        text = "Tap + to start one!",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(countdowns, key = { it.id }) { countdown ->
+                        val dismissState = rememberSwipeToDismissBoxState(
+                            confirmValueChange = { value ->
+                                if (value == SwipeToDismissBoxValue.EndToStart) {
+                                    val isRunning = !Duration.between(LocalDateTime.now(), countdown.targetDateTime).isNegative
+                                    if (isRunning) {
+                                        swipedCountdownToDelete = countdown
+                                        false // Don't dismiss yet, wait for confirmation
+                                    } else {
+                                        countdowns = countdowns.filter { it.id != countdown.id }
+                                        true
+                                    }
+                                } else {
+                                    false
+                                }
                             }
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(color, MaterialTheme.shapes.medium)
-                                    .padding(horizontal = 20.dp),
-                                contentAlignment = Alignment.CenterEnd
-                            ) {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = "Delete",
-                                    tint = Color.White
-                                )
-                            }
-                        }
-                    ) {
-                        CountdownCard(
-                            countdown = countdown,
-                            currentTime = currentTime,
-                            onEdit = { editingCountdown = countdown }
                         )
+
+                        SwipeToDismissBox(
+                            state = dismissState,
+                            enableDismissFromStartToEnd = false,
+                            backgroundContent = {
+                                val color = when (dismissState.dismissDirection) {
+                                    SwipeToDismissBoxValue.EndToStart -> Color.Red
+                                    else -> Color.Transparent
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(color, MaterialTheme.shapes.medium)
+                                        .padding(horizontal = 20.dp),
+                                    contentAlignment = Alignment.CenterEnd
+                                ) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = "Delete",
+                                        tint = Color.White
+                                    )
+                                }
+                            }
+                        ) {
+                            CountdownCard(
+                                countdown = countdown,
+                                currentTime = currentTime,
+                                onEdit = { editingCountdown = countdown }
+                            )
+                        }
                     }
                 }
             }
