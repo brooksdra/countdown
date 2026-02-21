@@ -25,4 +25,5 @@
 - [2023-10-27 11:50:00] Add an empty state message "No countdowns yet. Tap + to start one!" when the list is empty. (Status: COMPLETED)
 - [2023-10-27 11:55:00] Update CountdownCard to allow description expansion on click and animate size change. (Status: COMPLETED)
 - [2023-10-27 12:00:00] Implement sorting logic: Define SortOption enum (TARGET_DATE, NAME, CREATED_AT) and apply it to the countdowns list using remember and derived state. (Status: COMPLETED)
-- [2023-10-27 12:05:00] Add manual drag-and-drop sorting option. (Status: IN_PROGRESS)
+- [2023-10-27 12:05:00] Add manual drag-and-drop sorting option. (Status: COMPLETED)
+- [2023-10-27 12:10:00] Add settings sprocket to title bar and a setting to change the app title. (Status: IN_PROGRESS)

@@ -5,7 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -38,8 +37,40 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -115,7 +146,10 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun CountdownApp() {
     var countdowns by remember { mutableStateOf(listOf<Countdown>()) }
+    var appTitle by remember { mutableStateOf("My Countdowns") }
+    
     var showAddDialog by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
     var editingCountdown by remember { mutableStateOf<Countdown?>(null) }
     var swipedCountdownToDelete by remember { mutableStateOf<Countdown?>(null) }
     
@@ -159,7 +193,12 @@ fun CountdownApp() {
         modifier = Modifier.fillMaxSize(),
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("My Countdowns") },
+                title = { Text(appTitle) },
+                navigationIcon = {
+                    IconButton(onClick = { showSettingsDialog = true }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                    }
+                },
                 actions = {
                     if (currentSortOption != SortOption.MANUAL) {
                         IconButton(onClick = { isAscending = !isAscending }) {
@@ -314,6 +353,17 @@ fun CountdownApp() {
             )
         }
 
+        if (showSettingsDialog) {
+            SettingsDialog(
+                currentTitle = appTitle,
+                onDismiss = { showSettingsDialog = false },
+                onSave = { newTitle ->
+                    appTitle = newTitle
+                    showSettingsDialog = false
+                }
+            )
+        }
+
         editingCountdown?.let { countdown ->
             CountdownDialog(
                 title = "Edit Countdown",
@@ -353,6 +403,45 @@ fun CountdownApp() {
             )
         }
     }
+}
+
+@Composable
+fun SettingsDialog(
+    currentTitle: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var title by remember { mutableStateOf(currentTitle) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Settings") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Customize App Title", style = MaterialTheme.typography.labelLarge)
+                TextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("App Title") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(title) },
+                enabled = title.isNotBlank()
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable
@@ -418,7 +507,7 @@ fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -
                         text = countdown.description,
                         fontSize = 14.sp,
                         color = contentColor.copy(alpha = 0.8f),
-                        maxLines = if (expanded) 10 else 1,
+                        maxLines = if (expanded) { 10 } else { 1 },
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(8.dp))
