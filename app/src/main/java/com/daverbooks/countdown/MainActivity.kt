@@ -1,9 +1,17 @@
 package com.daverbooks.countdown
 
+import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -37,6 +45,8 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -57,6 +67,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -77,6 +88,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -84,6 +96,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
+import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.daverbooks.countdown.ui.theme.MyCountDownTheme
 import kotlinx.coroutines.delay
 import java.time.Duration
@@ -101,7 +115,9 @@ data class Countdown(
     val description: String,
     val targetDateTime: LocalDateTime,
     val createdAt: LocalDateTime = LocalDateTime.now(),
-    val color: Color = Color.Gray
+    val color: Color = Color.Gray,
+    val isNotificationEnabled: Boolean = false,
+    val hasNotified: Boolean = false
 )
 
 enum class SortOption(val displayName: String) {
@@ -133,6 +149,7 @@ val PresetColors = listOf(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        createNotificationChannel(this)
         enableEdgeToEdge()
         setContent {
             MyCountDownTheme {
@@ -140,6 +157,33 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
+
+private fun createNotificationChannel(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val name = "Countdown Alarms"
+        val descriptionText = "Notifications when timers finish"
+        val importance = NotificationManager.IMPORTANCE_HIGH
+        val channel = NotificationChannel("COUNTDOWN_CHANNEL", name, importance).apply {
+            description = descriptionText
+        }
+        val notificationManager: NotificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.createNotificationChannel(channel)
+    }
+}
+
+private fun triggerNotification(context: Context, countdown: Countdown) {
+    val builder = NotificationCompat.Builder(context, "COUNTDOWN_CHANNEL")
+        .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+        .setContentTitle("Countdown Finished!")
+        .setContentText("${countdown.name} has reached zero.")
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setAutoCancel(true)
+
+    val notificationManager: NotificationManager =
+        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    notificationManager.notify(countdown.id.toInt(), builder.build())
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -155,6 +199,29 @@ fun CountdownApp() {
     
     var currentSortOption by remember { mutableStateOf(SortOption.TARGET_DATE) }
     var isAscending by remember { mutableStateOf(true) }
+
+    val context = LocalContext.current
+    var hasNotificationPermission by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            } else {
+                true
+            }
+        )
+    }
+
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        hasNotificationPermission = isGranted
+    }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     val displayCountdowns = remember(countdowns, currentSortOption, isAscending) {
         if (currentSortOption == SortOption.MANUAL) {
@@ -178,12 +245,26 @@ fun CountdownApp() {
         }
     }
 
+    // Check for finished timers and trigger notifications
+    LaunchedEffect(currentTime) {
+        countdowns.forEach { countdown ->
+            if (countdown.isNotificationEnabled && !countdown.hasNotified) {
+                if (Duration.between(currentTime, countdown.targetDateTime).isNegative) {
+                    triggerNotification(context, countdown)
+                    countdowns = countdowns.map { 
+                        if (it.id == countdown.id) it.copy(hasNotified = true) else it 
+                    }
+                }
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         val now = LocalDateTime.now()
         countdowns = listOf(
-            Countdown(1, "Long Countdown", "", LocalDateTime.of(2026, 7, 10, 17, 0, 0), now, PresetColors[0]),
+            Countdown(1, "Long Countdown", "", LocalDateTime.of(2026, 7, 10, 17, 0, 0), now, PresetColors[0], isNotificationEnabled = true),
             Countdown(2, "Day Plus", "", now.plusDays(1).plusHours(1).plusMinutes(1).plusSeconds(1), now, PresetColors[5]),
-            Countdown(3, "Hour Plus", "", now.plusHours(1).plusMinutes(1).plusSeconds(1), now, PresetColors[9]),
+            Countdown(3, "Hour Plus", "", now.plusHours(1).plusMinutes(1).plusSeconds(1), now, PresetColors[9], isNotificationEnabled = true),
             Countdown(4, "Minute Plus", "This is a description that will be longer than one line to test the expansion logic. Tap the card to see more or less of it!", now.plusMinutes(1).plusSeconds(1), now, PresetColors[12]),
             Countdown(5, "Minute Ago", "", now.minusMinutes(1), now, PresetColors[15]),
         )
@@ -339,13 +420,14 @@ fun CountdownApp() {
             CountdownDialog(
                 title = "Add New Countdown",
                 onDismiss = { showAddDialog = false },
-                onConfirm = { name, description, dateTime, color ->
+                onConfirm = { name, description, dateTime, color, isNotificationEnabled ->
                     val newCountdown = Countdown(
                         id = System.currentTimeMillis(),
                         name = name,
                         description = description,
                         targetDateTime = dateTime,
-                        color = color
+                        color = color,
+                        isNotificationEnabled = isNotificationEnabled
                     )
                     countdowns = countdowns + newCountdown
                     showAddDialog = false
@@ -369,9 +451,16 @@ fun CountdownApp() {
                 title = "Edit Countdown",
                 initialCountdown = countdown,
                 onDismiss = { editingCountdown = null },
-                onConfirm = { name, description, dateTime, color ->
+                onConfirm = { name, description, dateTime, color, isNotificationEnabled ->
                     countdowns = countdowns.map {
-                        if (it.id == countdown.id) it.copy(name = name, description = description, targetDateTime = dateTime, color = color) else it
+                        if (it.id == countdown.id) it.copy(
+                            name = name, 
+                            description = description, 
+                            targetDateTime = dateTime, 
+                            color = color,
+                            isNotificationEnabled = isNotificationEnabled,
+                            hasNotified = if (it.targetDateTime != dateTime) false else it.hasNotified
+                        ) else it
                     }
                     editingCountdown = null
                 },
@@ -478,6 +567,14 @@ fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -
                 modifier = Modifier.align(Alignment.TopEnd),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                if (countdown.isNotificationEnabled) {
+                    Icon(
+                        Icons.Default.Notifications,
+                        contentDescription = "Notification enabled",
+                        tint = contentColor.copy(alpha = 0.7f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
                 IconButton(onClick = onEdit) {
                     Icon(Icons.Default.Edit, contentDescription = "Edit", tint = contentColor)
                 }
@@ -596,12 +693,13 @@ fun CountdownDialog(
     title: String,
     initialCountdown: Countdown? = null,
     onDismiss: () -> Unit,
-    onConfirm: (String, String, LocalDateTime, Color) -> Unit,
+    onConfirm: (String, String, LocalDateTime, Color, Boolean) -> Unit,
     onDelete: (() -> Unit)? = null
 ) {
     var name by remember { mutableStateOf(initialCountdown?.name ?: "") }
     var description by remember { mutableStateOf(initialCountdown?.description ?: "") }
     var selectedColor by remember { mutableStateOf(initialCountdown?.color ?: PresetColors[0]) }
+    var isNotificationEnabled by remember { mutableStateOf(initialCountdown?.isNotificationEnabled ?: false) }
     
     val nowDateTime = LocalDateTime.now()
     val initialDateTime = initialCountdown?.targetDateTime ?: nowDateTime
@@ -650,6 +748,26 @@ fun CountdownDialog(
                     ) {
                         Text(selectedTime.format(timeFormatter))
                     }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            if (isNotificationEnabled) Icons.Default.Notifications else Icons.Default.NotificationsOff,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Notify when finished")
+                    }
+                    Switch(
+                        checked = isNotificationEnabled,
+                        onCheckedChange = { isNotificationEnabled = it }
+                    )
                 }
 
                 Text("Quick Add", style = MaterialTheme.typography.labelLarge)
@@ -717,7 +835,7 @@ fun CountdownDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    onConfirm(name, description, LocalDateTime.of(selectedDate, selectedTime), selectedColor)
+                    onConfirm(name, description, LocalDateTime.of(selectedDate, selectedTime), selectedColor, isNotificationEnabled)
                 },
                 enabled = name.isNotBlank()
             ) {
