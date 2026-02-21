@@ -8,3 +8,5 @@
 - [2023-10-27 10:25:00] Please adjust the display control so the time is on one line only, no wrap and if any of the largest denomonations are zero, they are removed from view.
 - [2023-10-27 10:30:00] The control with Days is still wrapping?
 - [2023-10-27 10:35:00] On restart of the application, please make it 5 test timers are automatically started with the following: 2026-07-10T17:00:00:000, 1 day, 1 hour, 1 minute, 1 second from startup, 1 hour, 1 minute, 1 second from startup, 1 minute, 1 second from startup, 1 minute sense startup
+- [2023-10-27 10:40:00] Please add in small print Days, Hours, Minutes, Seconds labels centered under each number and make it singluar Day, Hour, Minute, Second when its value is 1
+- [2023-10-27 10:45:00] ooops, it looks like the timers that are not finished are no longer centered, but left justified.

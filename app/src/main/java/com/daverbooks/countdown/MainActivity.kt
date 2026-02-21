@@ -114,20 +114,6 @@ fun CountdownCard(countdown: Countdown) {
     }
 
     val duration = Duration.between(currentTime, countdown.targetDateTime)
-    val remaining = if (duration.isNegative) "Finished" else {
-        val days = duration.toDays()
-        val hours = duration.toHours() % 24
-        val minutes = duration.toMinutes() % 60
-        val seconds = duration.seconds % 60
-
-        val parts = mutableListOf<String>()
-        if (days > 0) parts.add(String.format(Locale.getDefault(), "%d", days))
-        if (days > 0 || hours > 0) parts.add(String.format(Locale.getDefault(), "%02d", hours))
-        if (days > 0 || hours > 0 || minutes > 0) parts.add(String.format(Locale.getDefault(), "%02d", minutes))
-        parts.add(String.format(Locale.getDefault(), "%02d", seconds))
-
-        parts.joinToString(" : ")
-    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -152,18 +138,78 @@ fun CountdownCard(countdown: Countdown) {
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = remaining,
-                fontSize = 28.sp, // Slightly reduced font size to help with fit
-                fontWeight = FontWeight.ExtraBold,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                maxLines = 1,
-                softWrap = false, // Explicitly disable soft wrap
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
+
+            if (duration.isNegative) {
+                Text(
+                    text = "Finished",
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                val days = duration.toDays()
+                val hours = (duration.toHours() % 24).toInt()
+                val minutes = (duration.toMinutes() % 60).toInt()
+                val seconds = (duration.seconds % 60).toInt()
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    var showPrevious = false
+
+                    if (days > 0) {
+                        CountdownUnit(days, "Day", "Days")
+                        showPrevious = true
+                    }
+                    if (showPrevious || hours > 0) {
+                        if (showPrevious) CountdownSeparator()
+                        CountdownUnit(hours.toLong(), "Hour", "Hours")
+                        showPrevious = true
+                    }
+                    if (showPrevious || minutes > 0) {
+                        if (showPrevious) CountdownSeparator()
+                        CountdownUnit(minutes.toLong(), "Minute", "Minutes")
+                        showPrevious = true
+                    }
+                    if (showPrevious) CountdownSeparator()
+                    CountdownUnit(seconds.toLong(), "Second", "Seconds")
+                }
+            }
         }
     }
+}
+
+@Composable
+fun CountdownUnit(value: Long, singular: String, plural: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = if (singular == "Day") value.toString() else String.format(Locale.getDefault(), "%02d", value),
+            fontSize = 28.sp,
+            fontWeight = FontWeight.ExtraBold,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            lineHeight = 28.sp
+        )
+        Text(
+            text = if (value == 1L) singular else plural,
+            fontSize = 10.sp,
+            style = MaterialTheme.typography.labelSmall,
+            lineHeight = 10.sp
+        )
+    }
+}
+
+@Composable
+fun CountdownSeparator() {
+    Text(
+        text = ":",
+        fontSize = 28.sp,
+        fontWeight = FontWeight.ExtraBold,
+        modifier = Modifier.padding(horizontal = 4.dp),
+        lineHeight = 28.sp
+    )
 }
 
 @Composable
