@@ -14,6 +14,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.daverbooks.countdown.ui.theme.MyCountDownTheme
@@ -46,6 +48,17 @@ class MainActivity : ComponentActivity() {
 fun CountdownApp() {
     var countdowns by remember { mutableStateOf(listOf<Countdown>()) }
     var showDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val now = LocalDateTime.now()
+        countdowns = listOf(
+            Countdown(1, "Long Countdown", "", LocalDateTime.of(2026, 7, 10, 17, 0, 0)),
+            Countdown(2, "Day Plus", "", now.plusDays(1).plusHours(1).plusMinutes(1).plusSeconds(1)),
+            Countdown(3, "Hour Plus", "", now.plusHours(1).plusMinutes(1).plusSeconds(1)),
+            Countdown(4, "Minute Plus", "", now.plusMinutes(1).plusSeconds(1)),
+            Countdown(5, "Minute Ago", "", now.minusMinutes(1)),
+        )
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -106,7 +119,14 @@ fun CountdownCard(countdown: Countdown) {
         val hours = duration.toHours() % 24
         val minutes = duration.toMinutes() % 60
         val seconds = duration.seconds % 60
-        String.format(Locale.getDefault(), "%02d : %02d : %02d : %02d", days, hours, minutes, seconds)
+
+        val parts = mutableListOf<String>()
+        if (days > 0) parts.add(String.format(Locale.getDefault(), "%d", days))
+        if (days > 0 || hours > 0) parts.add(String.format(Locale.getDefault(), "%02d", hours))
+        if (days > 0 || hours > 0 || minutes > 0) parts.add(String.format(Locale.getDefault(), "%02d", minutes))
+        parts.add(String.format(Locale.getDefault(), "%02d", seconds))
+
+        parts.joinToString(" : ")
     }
 
     Card(
@@ -120,19 +140,27 @@ fun CountdownCard(countdown: Countdown) {
             Text(
                 text = countdown.name,
                 fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = countdown.description,
                 fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = remaining,
-                fontSize = 32.sp,
+                fontSize = 28.sp, // Slightly reduced font size to help with fit
                 fontWeight = FontWeight.ExtraBold,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                maxLines = 1,
+                softWrap = false, // Explicitly disable soft wrap
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
