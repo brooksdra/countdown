@@ -10,3 +10,5 @@
 - [2023-10-27 10:35:00] On restart of the application, please make it 5 test timers are automatically started with the following: 2026-07-10T17:00:00:000, 1 day, 1 hour, 1 minute, 1 second from startup, 1 hour, 1 minute, 1 second from startup, 1 minute, 1 second from startup, 1 minute sense startup
 - [2023-10-27 10:40:00] Please add in small print Days, Hours, Minutes, Seconds labels centered under each number and make it singluar Day, Hour, Minute, Second when its value is 1
 - [2023-10-27 10:45:00] ooops, it looks like the timers that are not finished are no longer centered, but left justified.
+- [2023-10-27 10:50:00] Let's focus on the add popup. Pleaes use a caledar selector starting with today and a time picker starting with now
+- [2023-10-27 10:55:00] Please add a delete button on the timer control with an are you sure if the timer is still running.
