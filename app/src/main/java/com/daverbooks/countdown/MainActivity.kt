@@ -4,6 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,11 +16,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
@@ -48,6 +54,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,7 +76,27 @@ data class Countdown(
     val id: Long,
     val name: String,
     val description: String,
-    val targetDateTime: LocalDateTime
+    val targetDateTime: LocalDateTime,
+    val color: Color = Color.Gray
+)
+
+val PresetColors = listOf(
+    Color(0xFFE57373), // Red
+    Color(0xFFF06292), // Pink
+    Color(0xFFBA68C8), // Purple
+    Color(0xFF9575CD), // Deep Purple
+    Color(0xFF7986CB), // Indigo
+    Color(0xFF64B5F6), // Blue
+    Color(0xFF4FC3F7), // Light Blue
+    Color(0xFF4DD0E1), // Cyan
+    Color(0xFF4DB6AC), // Teal
+    Color(0xFF81C784), // Green
+    Color(0xFFAED581), // Light Green
+    Color(0xFFFFD54F), // Amber
+    Color(0xFFFFB74D), // Orange
+    Color(0xFFFF8A65), // Deep Orange
+    Color(0xFFA1887F), // Brown
+    Color(0xFF90A4AE)  // Blue Grey
 )
 
 class MainActivity : ComponentActivity() {
@@ -92,11 +120,11 @@ fun CountdownApp() {
     LaunchedEffect(Unit) {
         val now = LocalDateTime.now()
         countdowns = listOf(
-            Countdown(1, "Last Day of Work", "", LocalDateTime.of(2026, 7, 10, 17, 0, 0)),
-            Countdown(2, "Day Plus Test", "", now.plusDays(1).plusHours(1).plusMinutes(1).plusSeconds(1)),
-            Countdown(3, "Hour Plus Test", "", now.plusHours(1).plusMinutes(1).plusSeconds(1)),
-            Countdown(4, "Minute Plus Test", "", now.plusMinutes(1).plusSeconds(1)),
-            Countdown(5, "Minute Ago Test", "", now.minusMinutes(1)),
+            Countdown(1, "Long Countdown", "", LocalDateTime.of(2026, 7, 10, 17, 0, 0), PresetColors[0]),
+            Countdown(2, "Day Plus", "", now.plusDays(1).plusHours(1).plusMinutes(1).plusSeconds(1), PresetColors[5]),
+            Countdown(3, "Hour Plus", "", now.plusHours(1).plusMinutes(1).plusSeconds(1), PresetColors[9]),
+            Countdown(4, "Minute Plus", "", now.plusMinutes(1).plusSeconds(1), PresetColors[12]),
+            Countdown(5, "Minute Ago", "", now.minusMinutes(1), PresetColors[15]),
         )
     }
 
@@ -131,12 +159,13 @@ fun CountdownApp() {
             CountdownDialog(
                 title = "Add New Countdown",
                 onDismiss = { showAddDialog = false },
-                onConfirm = { name, description, dateTime ->
+                onConfirm = { name, description, dateTime, color ->
                     val newCountdown = Countdown(
                         id = System.currentTimeMillis(),
                         name = name,
                         description = description,
-                        targetDateTime = dateTime
+                        targetDateTime = dateTime,
+                        color = color
                     )
                     countdowns = countdowns + newCountdown
                     showAddDialog = false
@@ -149,9 +178,9 @@ fun CountdownApp() {
                 title = "Edit Countdown",
                 initialCountdown = countdown,
                 onDismiss = { editingCountdown = null },
-                onConfirm = { name, description, dateTime ->
+                onConfirm = { name, description, dateTime, color ->
                     countdowns = countdowns.map {
-                        if (it.id == countdown.id) it.copy(name = name, description = description, targetDateTime = dateTime) else it
+                        if (it.id == countdown.id) it.copy(name = name, description = description, targetDateTime = dateTime, color = color) else it
                     }
                     editingCountdown = null
                 },
@@ -177,17 +206,33 @@ fun CountdownCard(countdown: Countdown, onEdit: () -> Unit) {
 
     val duration = Duration.between(currentTime, countdown.targetDateTime)
     val isRunning = !duration.isNegative
+    
+    val backgroundColor = if (isRunning) {
+        countdown.color
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+    }
+    
+    val contentColor = if (isRunning) {
+        Color.White // Assume white text looks good on these preset colors
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = backgroundColor,
+            contentColor = contentColor
+        )
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             IconButton(
                 onClick = onEdit,
                 modifier = Modifier.align(Alignment.TopEnd)
             ) {
-                Icon(Icons.Default.Edit, contentDescription = "Edit Countdown")
+                Icon(Icons.Default.Edit, contentDescription = "Edit Countdown", tint = contentColor)
             }
 
             Column(
@@ -204,7 +249,7 @@ fun CountdownCard(countdown: Countdown, onEdit: () -> Unit) {
                 Text(
                     text = countdown.description,
                     fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = contentColor.copy(alpha = 0.8f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -232,21 +277,21 @@ fun CountdownCard(countdown: Countdown, onEdit: () -> Unit) {
                         var showPrevious = false
 
                         if (days > 0) {
-                            CountdownUnit(days, "Day", "Days")
+                            CountdownUnit(days, "Day", "Days", contentColor)
                             showPrevious = true
                         }
                         if (showPrevious || hours > 0) {
-                            if (showPrevious) CountdownSeparator()
-                            CountdownUnit(hours.toLong(), "Hour", "Hours")
+                            if (showPrevious) CountdownSeparator(contentColor)
+                            CountdownUnit(hours.toLong(), "Hour", "Hours", contentColor)
                             showPrevious = true
                         }
                         if (showPrevious || minutes > 0) {
-                            if (showPrevious) CountdownSeparator()
-                            CountdownUnit(minutes.toLong(), "Minute", "Minutes")
+                            if (showPrevious) CountdownSeparator(contentColor)
+                            CountdownUnit(minutes.toLong(), "Minute", "Minutes", contentColor)
                             showPrevious = true
                         }
-                        if (showPrevious) CountdownSeparator()
-                        CountdownUnit(seconds.toLong(), "Second", "Seconds")
+                        if (showPrevious) CountdownSeparator(contentColor)
+                        CountdownUnit(seconds.toLong(), "Second", "Seconds", contentColor)
                     }
                 }
             }
@@ -255,32 +300,35 @@ fun CountdownCard(countdown: Countdown, onEdit: () -> Unit) {
 }
 
 @Composable
-fun CountdownUnit(value: Long, singular: String, plural: String) {
+fun CountdownUnit(value: Long, singular: String, plural: String, contentColor: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = if (singular == "Day") value.toString() else String.format(Locale.getDefault(), "%02d", value),
             fontSize = 28.sp,
             fontWeight = FontWeight.ExtraBold,
             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-            lineHeight = 28.sp
+            lineHeight = 28.sp,
+            color = contentColor
         )
         Text(
             text = if (value == 1L) singular else plural,
             fontSize = 10.sp,
             style = MaterialTheme.typography.labelSmall,
-            lineHeight = 10.sp
+            lineHeight = 10.sp,
+            color = contentColor.copy(alpha = 0.8f)
         )
     }
 }
 
 @Composable
-fun CountdownSeparator() {
+fun CountdownSeparator(contentColor: Color) {
     Text(
         text = ":",
         fontSize = 28.sp,
         fontWeight = FontWeight.ExtraBold,
         modifier = Modifier.padding(horizontal = 4.dp),
-        lineHeight = 28.sp
+        lineHeight = 28.sp,
+        color = contentColor
     )
 }
 
@@ -290,11 +338,12 @@ fun CountdownDialog(
     title: String,
     initialCountdown: Countdown? = null,
     onDismiss: () -> Unit,
-    onConfirm: (String, String, LocalDateTime) -> Unit,
+    onConfirm: (String, String, LocalDateTime, Color) -> Unit,
     onDelete: (() -> Unit)? = null
 ) {
     var name by remember { mutableStateOf(initialCountdown?.name ?: "") }
     var description by remember { mutableStateOf(initialCountdown?.description ?: "") }
+    var selectedColor by remember { mutableStateOf(initialCountdown?.color ?: PresetColors[0]) }
     
     val initialDateTime = initialCountdown?.targetDateTime ?: LocalDateTime.now().plusDays(1)
     var selectedDate by remember { mutableStateOf(initialDateTime.toLocalDate()) }
@@ -342,11 +391,38 @@ fun CountdownDialog(
                         Text(selectedTime.format(timeFormatter))
                     }
                 }
+
+                Text("Pick a Color", style = MaterialTheme.typography.labelLarge)
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(vertical = 4.dp)
+                ) {
+                    items(PresetColors) { color ->
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(color)
+                                .clickable { selectedColor = color },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (selectedColor == color) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = "Selected",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                onConfirm(name, description, LocalDateTime.of(selectedDate, selectedTime))
+                onConfirm(name, description, LocalDateTime.of(selectedDate, selectedTime), selectedColor)
             }) {
                 Text(if (initialCountdown == null) "Add" else "Save")
             }

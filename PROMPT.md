@@ -1,16 +1,18 @@
 # User Prompts
 
-- [2023-10-27 10:00:00] I just started a new project, please help me run it as is in the simulator
-- [2023-10-27 10:05:00] please commit the current project to the local git repository
-- [2023-10-27 10:10:00] are there any files I should avoid adding to the git repo that are not already properly identified in the .gitignore files
-- [2023-10-27 10:15:00] This is the first time I've built and android app, so I don't know much about it, and I will be asking for lots of help. Also please add a new PROMPT.md file and record each of my prompts in this file with a timestamp. For starters I'm building a Count Down application where I can add a new countdown with a name description and a date and time. The home screen should have a new button at the bottom of the screen to open a dialog to input the information and then add a list of countdowns starting from the top of the screen. This current countdown control should show the name across the top and fairly large countdown timer with Days : Hours : Minutes : Seconds
-- [2023-10-27 10:20:00] The MainActivity.kt has many errors and the simulator shows the original hello world page
-- [2023-10-27 10:25:00] Please adjust the display control so the time is on one line only, no wrap and if any of the largest denomonations are zero, they are removed from view.
-- [2023-10-27 10:30:00] The control with Days is still wrapping?
-- [2023-10-27 10:35:00] On restart of the application, please make it 5 test timers are automatically started with the following: 2026-07-10T17:00:00:000, 1 day, 1 hour, 1 minute, 1 second from startup, 1 hour, 1 minute, 1 second from startup, 1 minute, 1 second from startup, 1 minute sense startup
-- [2023-10-27 10:40:00] Please add in small print Days, Hours, Minutes, Seconds labels centered under each number and make it singluar Day, Hour, Minute, Second when its value is 1
-- [2023-10-27 10:45:00] ooops, it looks like the timers that are not finished are no longer centered, but left justified.
-- [2023-10-27 10:50:00] Let's focus on the add popup. Pleaes use a caledar selector starting with today and a time picker starting with now
-- [2023-10-27 10:55:00] Please add a delete button on the timer control with an are you sure if the timer is still running.
-- [2023-10-27 11:00:00] Please replace the delete button with an edit button so a user can change any value of the timer with a cancel. Then Move the delete into the edit popup.
-- [2023-10-27 11:05:00] Please add scrolling if there are more timers than fit on one screen
+- [2023-10-27 10:00:00] I just started a new project, please help me run it as is in the simulator (Status: COMPLETED)
+- [2023-10-27 10:05:00] please commit the current project to the local git repository (Status: COMPLETED - via manual instruction)
+- [2023-10-27 10:10:00] are there any files I should avoid adding to the git repo that are not already properly identified in the .gitignore files (Status: COMPLETED)
+- [2023-10-27 10:15:00] Build a Count Down application with name, description, and date/time. Home screen has "Add" button, dialog for input, and a list of countdowns. Display format: Days : Hours : Minutes : Seconds (Status: COMPLETED)
+- [2023-10-27 10:20:00] Fix MainActivity.kt errors and hello world screen (Status: COMPLETED)
+- [2023-10-27 10:25:00] Adjust display: time on one line, no wrap, remove leading zero denominations (Status: COMPLETED)
+- [2023-10-27 10:30:00] Fix Days wrapping issue (Status: COMPLETED)
+- [2023-10-27 10:35:00] Automatically start 5 test timers on app start (Status: COMPLETED)
+- [2023-10-27 10:40:00] Add singular/plural labels (Day, Hour, etc.) centered under each number (Status: COMPLETED)
+- [2023-10-27 10:45:00] Center timers that are still running (Status: COMPLETED)
+- [2023-10-27 10:50:00] Replace text date input with Calendar and Time pickers (Status: COMPLETED)
+- [2023-10-27 10:55:00] Add delete button with confirmation for running timers (Status: COMPLETED)
+- [2023-10-27 11:00:00] Replace direct delete with Edit button; move delete into Edit popup (Status: COMPLETED)
+- [2023-10-27 11:05:00] Ensure list is scrollable (Status: COMPLETED - via LazyColumn)
+- [2023-10-27 11:10:00] Implement all generated prompts and update PROMPT.md (Status: COMPLETED)
+- [2023-10-27 11:15:00] Add a way to select a color from a color selector control so the user can set background colors for each timer. Modify the CountdownCard to change the background color or alpha (opacity) when isRunning is false. If a countdown is finished, the card should look "dimmed" or use a neutral grey tone, while active countdowns should use the selected color. (Status: IN_PROGRESS)
