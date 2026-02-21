@@ -28,4 +28,5 @@
 - [2023-10-27 12:05:00] Add manual drag-and-drop sorting option. (Status: COMPLETED)
 - [2023-10-27 12:10:00] Add settings sprocket to title bar and a setting to change the app title. (Status: COMPLETED)
 - [2023-10-27 12:15:00] Add individual notification setting for each timer to trigger an alarm when it finishes. (Status: COMPLETED)
-- [2023-10-27 12:20:00] Implement "Dark Mode" setting. (Status: IN_PROGRESS)
+- [2023-10-27 12:20:00] Implement "Dark Mode" setting. (Status: COMPLETED)
+- [2023-10-27 12:25:00] Update finished timer appearance: maintain original color but muted, add dark gray outline, and stop turning to light gray. (Status: COMPLETED)
