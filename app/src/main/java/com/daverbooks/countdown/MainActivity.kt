@@ -92,11 +92,11 @@ fun CountdownApp() {
     LaunchedEffect(Unit) {
         val now = LocalDateTime.now()
         countdowns = listOf(
-            Countdown(1, "Long Countdown", "", LocalDateTime.of(2026, 7, 10, 17, 0, 0)),
-            Countdown(2, "Day Plus", "", now.plusDays(1).plusHours(1).plusMinutes(1).plusSeconds(1)),
-            Countdown(3, "Hour Plus", "", now.plusHours(1).plusMinutes(1).plusSeconds(1)),
-            Countdown(4, "Minute Plus", "", now.plusMinutes(1).plusSeconds(1)),
-            Countdown(5, "Minute Ago", "", now.minusMinutes(1)),
+            Countdown(1, "Last Day of Work", "", LocalDateTime.of(2026, 7, 10, 17, 0, 0)),
+            Countdown(2, "Day Plus Test", "", now.plusDays(1).plusHours(1).plusMinutes(1).plusSeconds(1)),
+            Countdown(3, "Hour Plus Test", "", now.plusHours(1).plusMinutes(1).plusSeconds(1)),
+            Countdown(4, "Minute Plus Test", "", now.plusMinutes(1).plusSeconds(1)),
+            Countdown(5, "Minute Ago Test", "", now.minusMinutes(1)),
         )
     }
 
