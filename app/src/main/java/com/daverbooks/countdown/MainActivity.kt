@@ -27,32 +27,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberTimePickerState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -112,11 +88,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CountdownApp() {
     var countdowns by remember { mutableStateOf(listOf<Countdown>()) }
     var showAddDialog by remember { mutableStateOf(false) }
     var editingCountdown by remember { mutableStateOf<Countdown?>(null) }
+    var swipedCountdownToDelete by remember { mutableStateOf<Countdown?>(null) }
 
     LaunchedEffect(Unit) {
         val now = LocalDateTime.now()
@@ -148,10 +126,51 @@ fun CountdownApp() {
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(countdowns, key = { it.id }) { countdown ->
-                    CountdownCard(
-                        countdown = countdown,
-                        onEdit = { editingCountdown = countdown }
+                    val dismissState = rememberSwipeToDismissBoxState(
+                        confirmValueChange = { value ->
+                            if (value == SwipeToDismissBoxValue.EndToStart) {
+                                val isRunning = !Duration.between(LocalDateTime.now(), countdown.targetDateTime).isNegative
+                                if (isRunning) {
+                                    swipedCountdownToDelete = countdown
+                                    false // Don't dismiss yet, wait for confirmation
+                                } else {
+                                    countdowns = countdowns.filter { it.id != countdown.id }
+                                    true
+                                }
+                            } else {
+                                false
+                            }
+                        }
                     )
+
+                    SwipeToDismissBox(
+                        state = dismissState,
+                        enableDismissFromStartToEnd = false,
+                        backgroundContent = {
+                            val color = when (dismissState.dismissDirection) {
+                                SwipeToDismissBoxValue.EndToStart -> Color.Red
+                                else -> Color.Transparent
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(color, MaterialTheme.shapes.medium)
+                                    .padding(horizontal = 20.dp),
+                                contentAlignment = Alignment.CenterEnd
+                            ) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "Delete",
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                    ) {
+                        CountdownCard(
+                            countdown = countdown,
+                            onEdit = { editingCountdown = countdown }
+                        )
+                    }
                 }
             }
         }
@@ -188,6 +207,27 @@ fun CountdownApp() {
                 onDelete = {
                     countdowns = countdowns.filter { it.id != countdown.id }
                     editingCountdown = null
+                }
+            )
+        }
+
+        swipedCountdownToDelete?.let { countdown ->
+            AlertDialog(
+                onDismissRequest = { swipedCountdownToDelete = null },
+                title = { Text("Delete Countdown") },
+                text = { Text("Are you sure you want to delete the running countdown \"${countdown.name}\"?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        countdowns = countdowns.filter { it.id != countdown.id }
+                        swipedCountdownToDelete = null
+                    }) {
+                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { swipedCountdownToDelete = null }) {
+                        Text("Cancel")
+                    }
                 }
             )
         }
