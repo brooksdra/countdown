@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
@@ -347,7 +348,8 @@ fun CountdownDialog(
     var description by remember { mutableStateOf(initialCountdown?.description ?: "") }
     var selectedColor by remember { mutableStateOf(initialCountdown?.color ?: PresetColors[0]) }
     
-    val initialDateTime = initialCountdown?.targetDateTime ?: LocalDateTime.now().plusDays(1)
+    val nowDateTime = LocalDateTime.now()
+    val initialDateTime = initialCountdown?.targetDateTime ?: nowDateTime
     var selectedDate by remember { mutableStateOf(initialDateTime.toLocalDate()) }
     var selectedTime by remember { mutableStateOf(initialDateTime.toLocalTime()) }
 
@@ -393,6 +395,40 @@ fun CountdownDialog(
                     ) {
                         Text(selectedTime.format(timeFormatter))
                     }
+                }
+
+                Text("Quick Add", style = MaterialTheme.typography.labelLarge)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    AssistChip(
+                        onClick = {
+                            val current = LocalDateTime.of(selectedDate, selectedTime)
+                            val newDt = current.plusHours(1)
+                            selectedDate = newDt.toLocalDate()
+                            selectedTime = newDt.toLocalTime()
+                        },
+                        label = { Text("+1 Hour") }
+                    )
+                    AssistChip(
+                        onClick = {
+                            val current = LocalDateTime.of(selectedDate, selectedTime)
+                            val newDt = current.plusDays(1)
+                            selectedDate = newDt.toLocalDate()
+                            selectedTime = newDt.toLocalTime()
+                        },
+                        label = { Text("+1 Day") }
+                    )
+                    AssistChip(
+                        onClick = {
+                            val current = LocalDateTime.of(selectedDate, selectedTime)
+                            val newDt = current.plusWeeks(1)
+                            selectedDate = newDt.toLocalDate()
+                            selectedTime = newDt.toLocalTime()
+                        },
+                        label = { Text("+1 Week") }
+                    )
                 }
 
                 Text("Pick a Color", style = MaterialTheme.typography.labelLarge)

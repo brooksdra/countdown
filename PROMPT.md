@@ -16,4 +16,6 @@
 - [2023-10-27 11:05:00] Ensure list is scrollable (Status: COMPLETED - via LazyColumn)
 - [2023-10-27 11:10:00] Implement all generated prompts and update PROMPT.md (Status: COMPLETED)
 - [2023-10-27 11:15:00] Add a way to select a color from a color selector control so the user can set background colors for each timer. Modify the CountdownCard to change the background color or alpha (opacity) when isRunning is false. If a countdown is finished, the card should look "dimmed" or use a neutral grey tone, while active countdowns should use the selected color. (Status: COMPLETED)
-- [2023-10-27 11:20:00] Update CountdownDialog: "Confirm" button enabled only if name is not blank, add singleLine = true to Name TextField. Shrink CountdownCard if no description. (Status: IN_PROGRESS)
+- [2023-10-27 11:20:00] Update CountdownDialog: "Confirm" button enabled only if name is not blank, add singleLine = true to Name TextField. Shrink CountdownCard if no description. (Status: COMPLETED)
+- [2023-10-27 11:25:00] Add "Quick Add" chips (+1 Hour, +1 Day, +1 Week) to CountdownDialog to update selected date/time. (Status: COMPLETED)
+- [2023-10-27 11:30:00] Fix CountdownDialog: Default date should be today, not tomorrow. "Quick Add" chips should increment existing time, not reset it. (Status: IN_PROGRESS)
