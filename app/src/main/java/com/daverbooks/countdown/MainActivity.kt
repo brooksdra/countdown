@@ -13,6 +13,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -48,40 +50,8 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberSwipeToDismissBoxState
-import androidx.compose.material3.rememberTimePickerState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -92,6 +62,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -108,6 +79,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Collections
 import java.util.Locale
+import kotlin.math.roundToInt
 
 data class Countdown(
     val id: Long,
@@ -152,8 +124,16 @@ class MainActivity : ComponentActivity() {
         createNotificationChannel(this)
         enableEdgeToEdge()
         setContent {
-            MyCountDownTheme {
-                CountdownApp()
+            var appTitle by remember { mutableStateOf("My Countdowns") }
+            var isDarkMode by remember { mutableStateOf(false) }
+            
+            MyCountDownTheme(darkTheme = isDarkMode) {
+                CountdownApp(
+                    appTitle = appTitle,
+                    onTitleChange = { appTitle = it },
+                    isDarkMode = isDarkMode,
+                    onDarkModeChange = { isDarkMode = it }
+                )
             }
         }
     }
@@ -188,9 +168,13 @@ private fun triggerNotification(context: Context, countdown: Countdown) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CountdownApp() {
+fun CountdownApp(
+    appTitle: String,
+    onTitleChange: (String) -> Unit,
+    isDarkMode: Boolean,
+    onDarkModeChange: (Boolean) -> Unit
+) {
     var countdowns by remember { mutableStateOf(listOf<Countdown>()) }
-    var appTitle by remember { mutableStateOf("My Countdowns") }
     
     var showAddDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -438,9 +422,11 @@ fun CountdownApp() {
         if (showSettingsDialog) {
             SettingsDialog(
                 currentTitle = appTitle,
+                isDarkMode = isDarkMode,
                 onDismiss = { showSettingsDialog = false },
-                onSave = { newTitle ->
-                    appTitle = newTitle
+                onSave = { newTitle, newDarkMode ->
+                    onTitleChange(newTitle)
+                    onDarkModeChange(newDarkMode)
                     showSettingsDialog = false
                 }
             )
@@ -497,29 +483,44 @@ fun CountdownApp() {
 @Composable
 fun SettingsDialog(
     currentTitle: String,
+    isDarkMode: Boolean,
     onDismiss: () -> Unit,
-    onSave: (String) -> Unit
+    onSave: (String, Boolean) -> Unit
 ) {
     var title by remember { mutableStateOf(currentTitle) }
+    var darkMode by remember { mutableStateOf(isDarkMode) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Settings") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Customize App Title", style = MaterialTheme.typography.labelLarge)
-                TextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("App Title") },
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("App Title", style = MaterialTheme.typography.labelLarge)
+                    TextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+                
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Dark Mode")
+                    Switch(
+                        checked = darkMode,
+                        onCheckedChange = { darkMode = it }
+                    )
+                }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(title) },
+                onClick = { onSave(title, darkMode) },
                 enabled = title.isNotBlank()
             ) {
                 Text("Save")
