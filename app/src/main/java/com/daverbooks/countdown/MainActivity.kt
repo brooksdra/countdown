@@ -123,7 +123,7 @@ fun CountdownApp() {
             Countdown(1, "Long Countdown", "", LocalDateTime.of(2026, 7, 10, 17, 0, 0), PresetColors[0]),
             Countdown(2, "Day Plus", "", now.plusDays(1).plusHours(1).plusMinutes(1).plusSeconds(1), PresetColors[5]),
             Countdown(3, "Hour Plus", "", now.plusHours(1).plusMinutes(1).plusSeconds(1), PresetColors[9]),
-            Countdown(4, "Minute Plus", "", now.plusMinutes(1).plusSeconds(1), PresetColors[12]),
+            Countdown(4, "Minute Plus", "This is a description", now.plusMinutes(1).plusSeconds(1), PresetColors[12]),
             Countdown(5, "Minute Ago", "", now.minusMinutes(1), PresetColors[15]),
         )
     }
@@ -246,14 +246,16 @@ fun CountdownCard(countdown: Countdown, onEdit: () -> Unit) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = countdown.description,
-                    fontSize = 14.sp,
-                    color = contentColor.copy(alpha = 0.8f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+                if (countdown.description.isNotBlank()) {
+                    Text(
+                        text = countdown.description,
+                        fontSize = 14.sp,
+                        color = contentColor.copy(alpha = 0.8f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
 
                 if (!isRunning) {
                     Text(
@@ -365,7 +367,8 @@ fun CountdownDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Name") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
                 TextField(
                     value = description,
@@ -421,9 +424,12 @@ fun CountdownDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                onConfirm(name, description, LocalDateTime.of(selectedDate, selectedTime), selectedColor)
-            }) {
+            TextButton(
+                onClick = {
+                    onConfirm(name, description, LocalDateTime.of(selectedDate, selectedTime), selectedColor)
+                },
+                enabled = name.isNotBlank()
+            ) {
                 Text(if (initialCountdown == null) "Add" else "Save")
             }
         },
