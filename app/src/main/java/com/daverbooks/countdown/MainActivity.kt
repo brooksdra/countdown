@@ -96,6 +96,14 @@ fun CountdownApp() {
     var editingCountdown by remember { mutableStateOf<Countdown?>(null) }
     var swipedCountdownToDelete by remember { mutableStateOf<Countdown?>(null) }
 
+    // Single source of time for all countdowns
+    val currentTime by produceState(initialValue = LocalDateTime.now()) {
+        while (true) {
+            delay(1000)
+            value = LocalDateTime.now()
+        }
+    }
+
     LaunchedEffect(Unit) {
         val now = LocalDateTime.now()
         countdowns = listOf(
@@ -168,6 +176,7 @@ fun CountdownApp() {
                     ) {
                         CountdownCard(
                             countdown = countdown,
+                            currentTime = currentTime,
                             onEdit = { editingCountdown = countdown }
                         )
                     }
@@ -235,16 +244,7 @@ fun CountdownApp() {
 }
 
 @Composable
-fun CountdownCard(countdown: Countdown, onEdit: () -> Unit) {
-    var currentTime by remember { mutableStateOf(LocalDateTime.now()) }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            currentTime = LocalDateTime.now()
-            delay(1000)
-        }
-    }
-
+fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -> Unit) {
     val duration = Duration.between(currentTime, countdown.targetDateTime)
     val isRunning = !duration.isNegative
     

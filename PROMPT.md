@@ -20,4 +20,5 @@
 - [2023-10-27 11:25:00] Add "Quick Add" chips (+1 Hour, +1 Day, +1 Week) to CountdownDialog to update selected date/time. (Status: COMPLETED)
 - [2023-10-27 11:30:00] Fix CountdownDialog: Default date should be today, not tomorrow. "Quick Add" chips should increment existing time, not reset it. (Status: COMPLETED)
 - [2023-10-27 11:35:00] Wrap CountdownCard in SwipeToDismissBox for quick swipe-to-delete (left swipe) with red background and delete icon. (Status: COMPLETED)
-- [2023-10-27 11:40:00] When swipe deleting a running timer, show "Are you sure?" confirmation dialog. (Status: IN_PROGRESS)
+- [2023-10-27 11:40:00] When swipe deleting a running timer, show "Are you sure?" confirmation dialog. (Status: COMPLETED)
+- [2023-10-27 11:45:00] Refactor the timer logic to use a single source of time in CountdownApp. (Status: IN_PROGRESS)
