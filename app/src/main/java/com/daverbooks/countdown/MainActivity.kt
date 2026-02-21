@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -110,7 +111,7 @@ fun CountdownApp() {
             Countdown(1, "Long Countdown", "", LocalDateTime.of(2026, 7, 10, 17, 0, 0), PresetColors[0]),
             Countdown(2, "Day Plus", "", now.plusDays(1).plusHours(1).plusMinutes(1).plusSeconds(1), PresetColors[5]),
             Countdown(3, "Hour Plus", "", now.plusHours(1).plusMinutes(1).plusSeconds(1), PresetColors[9]),
-            Countdown(4, "Minute Plus", "This is a description", now.plusMinutes(1).plusSeconds(1), PresetColors[12]),
+            Countdown(4, "Minute Plus", "This is a description that will be longer than one line to test the expansion logic. Tap the card to see more or less of it!", now.plusMinutes(1).plusSeconds(1), PresetColors[12]),
             Countdown(5, "Minute Ago", "", now.minusMinutes(1), PresetColors[15]),
         )
     }
@@ -264,6 +265,7 @@ fun CountdownApp() {
 
 @Composable
 fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
     val duration = Duration.between(currentTime, countdown.targetDateTime)
     val isRunning = !duration.isNegative
     
@@ -280,7 +282,10 @@ fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded }
+            .animateContentSize(),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(
             containerColor = backgroundColor,
@@ -311,7 +316,7 @@ fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -
                         text = countdown.description,
                         fontSize = 14.sp,
                         color = contentColor.copy(alpha = 0.8f),
-                        maxLines = 1,
+                        maxLines = if (expanded) 10 else 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(8.dp))
