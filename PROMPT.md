@@ -23,3 +23,6 @@
 - [2023-10-27 11:40:00] When swipe deleting a running timer, show "Are you sure?" confirmation dialog. (Status: COMPLETED)
 - [2023-10-27 11:45:00] Refactor the timer logic to use a single source of time in CountdownApp. (Status: COMPLETED)
 - [2023-10-27 11:50:00] Add an empty state message "No countdowns yet. Tap + to start one!" when the list is empty. (Status: COMPLETED)
+- [2023-10-27 11:55:00] Update CountdownCard to allow description expansion on click and animate size change. (Status: COMPLETED)
+- [2023-10-27 12:00:00] Implement sorting logic: Define SortOption enum (TARGET_DATE, NAME, CREATED_AT) and apply it to the countdowns list using remember and derived state. (Status: COMPLETED)
+- [2023-10-27 12:05:00] Add manual drag-and-drop sorting option. (Status: IN_PROGRESS)

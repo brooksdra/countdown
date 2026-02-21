@@ -5,8 +5,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,26 +22,37 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListItemInfo
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.zIndex
 import com.daverbooks.countdown.ui.theme.MyCountDownTheme
 import kotlinx.coroutines.delay
 import java.time.Duration
@@ -48,6 +61,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Collections
 import java.util.Locale
 
 data class Countdown(
@@ -55,8 +69,16 @@ data class Countdown(
     val name: String,
     val description: String,
     val targetDateTime: LocalDateTime,
+    val createdAt: LocalDateTime = LocalDateTime.now(),
     val color: Color = Color.Gray
 )
+
+enum class SortOption(val displayName: String) {
+    MANUAL("Manual"),
+    TARGET_DATE("Target Date"),
+    NAME("Name"),
+    CREATED_AT("Created At")
+}
 
 val PresetColors = listOf(
     Color(0xFFE57373), // Red
@@ -96,6 +118,23 @@ fun CountdownApp() {
     var showAddDialog by remember { mutableStateOf(false) }
     var editingCountdown by remember { mutableStateOf<Countdown?>(null) }
     var swipedCountdownToDelete by remember { mutableStateOf<Countdown?>(null) }
+    
+    var currentSortOption by remember { mutableStateOf(SortOption.TARGET_DATE) }
+    var isAscending by remember { mutableStateOf(true) }
+
+    val displayCountdowns = remember(countdowns, currentSortOption, isAscending) {
+        if (currentSortOption == SortOption.MANUAL) {
+            countdowns
+        } else {
+            val sorted = when (currentSortOption) {
+                SortOption.TARGET_DATE -> countdowns.sortedBy { it.targetDateTime }
+                SortOption.NAME -> countdowns.sortedBy { it.name.lowercase() }
+                SortOption.CREATED_AT -> countdowns.sortedBy { it.createdAt }
+                SortOption.MANUAL -> countdowns
+            }
+            if (isAscending) sorted else sorted.reversed()
+        }
+    }
 
     // Single source of time for all countdowns
     val currentTime by produceState(initialValue = LocalDateTime.now()) {
@@ -108,16 +147,56 @@ fun CountdownApp() {
     LaunchedEffect(Unit) {
         val now = LocalDateTime.now()
         countdowns = listOf(
-            Countdown(1, "Long Countdown", "", LocalDateTime.of(2026, 7, 10, 17, 0, 0), PresetColors[0]),
-            Countdown(2, "Day Plus", "", now.plusDays(1).plusHours(1).plusMinutes(1).plusSeconds(1), PresetColors[5]),
-            Countdown(3, "Hour Plus", "", now.plusHours(1).plusMinutes(1).plusSeconds(1), PresetColors[9]),
-            Countdown(4, "Minute Plus", "This is a description that will be longer than one line to test the expansion logic. Tap the card to see more or less of it!", now.plusMinutes(1).plusSeconds(1), PresetColors[12]),
-            Countdown(5, "Minute Ago", "", now.minusMinutes(1), PresetColors[15]),
+            Countdown(1, "Long Countdown", "", LocalDateTime.of(2026, 7, 10, 17, 0, 0), now, PresetColors[0]),
+            Countdown(2, "Day Plus", "", now.plusDays(1).plusHours(1).plusMinutes(1).plusSeconds(1), now, PresetColors[5]),
+            Countdown(3, "Hour Plus", "", now.plusHours(1).plusMinutes(1).plusSeconds(1), now, PresetColors[9]),
+            Countdown(4, "Minute Plus", "This is a description that will be longer than one line to test the expansion logic. Tap the card to see more or less of it!", now.plusMinutes(1).plusSeconds(1), now, PresetColors[12]),
+            Countdown(5, "Minute Ago", "", now.minusMinutes(1), now, PresetColors[15]),
         )
     }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("My Countdowns") },
+                actions = {
+                    if (currentSortOption != SortOption.MANUAL) {
+                        IconButton(onClick = { isAscending = !isAscending }) {
+                            Icon(
+                                if (isAscending) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Toggle Sort Direction"
+                            )
+                        }
+                    }
+                    var showSortMenu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { showSortMenu = true }) {
+                            Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Sort Options")
+                        }
+                        DropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false }
+                        ) {
+                            SortOption.entries.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option.displayName) },
+                                    onClick = {
+                                        currentSortOption = option
+                                        showSortMenu = false
+                                    },
+                                    trailingIcon = {
+                                        if (currentSortOption == option) {
+                                            Icon(Icons.Default.Check, contentDescription = null)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddDialog = true }) {
                 Icon(Icons.Default.Add, contentDescription = "Add Countdown")
@@ -129,7 +208,7 @@ fun CountdownApp() {
                 .padding(innerPadding)
                 .fillMaxSize()
         ) {
-            if (countdowns.isEmpty()) {
+            if (displayCountdowns.isEmpty()) {
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.Center,
@@ -147,57 +226,70 @@ fun CountdownApp() {
                     )
                 }
             } else {
+                val listState = rememberLazyListState()
+                val dragDropState = rememberDragDropState(listState) { fromIndex, toIndex ->
+                    val newList = countdowns.toMutableList()
+                    Collections.swap(newList, fromIndex, toIndex)
+                    countdowns = newList
+                }
+
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .dragContainer(dragDropState, currentSortOption == SortOption.MANUAL),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(countdowns, key = { it.id }) { countdown ->
-                        val dismissState = rememberSwipeToDismissBoxState(
-                            confirmValueChange = { value ->
-                                if (value == SwipeToDismissBoxValue.EndToStart) {
-                                    val isRunning = !Duration.between(LocalDateTime.now(), countdown.targetDateTime).isNegative
-                                    if (isRunning) {
-                                        swipedCountdownToDelete = countdown
-                                        false // Don't dismiss yet, wait for confirmation
+                    itemsIndexed(displayCountdowns, key = { _, item -> item.id }) { index, countdown ->
+                        DraggableItem(dragDropState, index) {
+                            val dismissState = rememberSwipeToDismissBoxState(
+                                confirmValueChange = { value ->
+                                    if (value == SwipeToDismissBoxValue.EndToStart) {
+                                        val isRunning = !Duration.between(LocalDateTime.now(), countdown.targetDateTime).isNegative
+                                        if (isRunning) {
+                                            swipedCountdownToDelete = countdown
+                                            false
+                                        } else {
+                                            countdowns = countdowns.filter { it.id != countdown.id }
+                                            true
+                                        }
                                     } else {
-                                        countdowns = countdowns.filter { it.id != countdown.id }
-                                        true
+                                        false
                                     }
-                                } else {
-                                    false
                                 }
-                            }
-                        )
-
-                        SwipeToDismissBox(
-                            state = dismissState,
-                            enableDismissFromStartToEnd = false,
-                            backgroundContent = {
-                                val color = when (dismissState.dismissDirection) {
-                                    SwipeToDismissBoxValue.EndToStart -> Color.Red
-                                    else -> Color.Transparent
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(color, MaterialTheme.shapes.medium)
-                                        .padding(horizontal = 20.dp),
-                                    contentAlignment = Alignment.CenterEnd
-                                ) {
-                                    Icon(
-                                        Icons.Default.Delete,
-                                        contentDescription = "Delete",
-                                        tint = Color.White
-                                    )
-                                }
-                            }
-                        ) {
-                            CountdownCard(
-                                countdown = countdown,
-                                currentTime = currentTime,
-                                onEdit = { editingCountdown = countdown }
                             )
+
+                            SwipeToDismissBox(
+                                state = dismissState,
+                                enableDismissFromStartToEnd = false,
+                                backgroundContent = {
+                                    val color = when (dismissState.dismissDirection) {
+                                        SwipeToDismissBoxValue.EndToStart -> Color.Red
+                                        else -> Color.Transparent
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(color, MaterialTheme.shapes.medium)
+                                            .padding(horizontal = 20.dp),
+                                        contentAlignment = Alignment.CenterEnd
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Delete,
+                                            contentDescription = "Delete",
+                                            tint = Color.White
+                                        )
+                                    }
+                                }
+                            ) {
+                                CountdownCard(
+                                    countdown = countdown,
+                                    currentTime = currentTime,
+                                    onEdit = { editingCountdown = countdown },
+                                    showDragHandle = currentSortOption == SortOption.MANUAL
+                                )
+                            }
                         }
                     }
                 }
@@ -264,7 +356,7 @@ fun CountdownApp() {
 }
 
 @Composable
-fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -> Unit) {
+fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -> Unit, showDragHandle: Boolean = false) {
     var expanded by remember { mutableStateOf(false) }
     val duration = Duration.between(currentTime, countdown.targetDateTime)
     val isRunning = !duration.isNegative
@@ -276,7 +368,7 @@ fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -
     }
     
     val contentColor = if (isRunning) {
-        Color.White // Assume white text looks good on these preset colors
+        Color.White
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
     }
@@ -293,11 +385,21 @@ fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -
         )
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
-            IconButton(
-                onClick = onEdit,
-                modifier = Modifier.align(Alignment.TopEnd)
+            Row(
+                modifier = Modifier.align(Alignment.TopEnd),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Edit, contentDescription = "Edit Countdown", tint = contentColor)
+                IconButton(onClick = onEdit) {
+                    Icon(Icons.Default.Edit, contentDescription = "Edit", tint = contentColor)
+                }
+                if (showDragHandle) {
+                    Icon(
+                        Icons.Default.Menu,
+                        contentDescription = "Drag to reorder",
+                        tint = contentColor,
+                        modifier = Modifier.padding(end = 12.dp)
+                    )
+                }
             }
 
             Column(
@@ -638,5 +740,98 @@ fun CountdownDialog(
                 }
             }
         }
+    }
+}
+
+// Drag and Drop implementation helpers
+@Composable
+fun rememberDragDropState(
+    lazyListState: LazyListState,
+    onMove: (Int, Int) -> Unit
+): DragDropState {
+    val state = remember(lazyListState) {
+        DragDropState(lazyListState, onMove)
+    }
+    return state
+}
+
+class DragDropState(
+    val lazyListState: LazyListState,
+    private val onMove: (Int, Int) -> Unit
+) {
+    var draggedDistance by mutableStateOf(0f)
+    var draggingItemIndex by mutableStateOf<Int?>(null)
+    var initiallyDraggedElement by mutableStateOf<LazyListItemInfo?>(null)
+
+    fun onDragStart(offset: androidx.compose.ui.geometry.Offset) {
+        lazyListState.layoutInfo.visibleItemsInfo
+            .firstOrNull { item ->
+                offset.y.toInt() in item.offset..(item.offset + item.size)
+            }?.also {
+                draggingItemIndex = it.index
+                initiallyDraggedElement = it
+            }
+    }
+
+    fun onDragInterrupted() {
+        draggingItemIndex = null
+        initiallyDraggedElement = null
+        draggedDistance = 0f
+    }
+
+    fun onDrag(offset: androidx.compose.ui.geometry.Offset) {
+        draggedDistance += offset.y
+
+        val initialElement = initiallyDraggedElement ?: return
+        val startOffset = (initialElement.offset + draggedDistance).toInt()
+        val endOffset = (initialElement.offset + initialElement.size + draggedDistance).toInt()
+
+        val currentElement = lazyListState.layoutInfo.visibleItemsInfo.find { item ->
+            draggingItemIndex != item.index &&
+                    (startOffset in item.offset..item.offset + item.size ||
+                            endOffset in item.offset..item.offset + item.size)
+        }
+
+        if (currentElement != null) {
+            onMove(draggingItemIndex!!, currentElement.index)
+            draggingItemIndex = currentElement.index
+        }
+    }
+}
+
+fun Modifier.dragContainer(dragDropState: DragDropState, enabled: Boolean): Modifier {
+    if (!enabled) return this
+    return this.pointerInput(dragDropState) {
+        detectDragGesturesAfterLongPress(
+            onDrag = { change, offset ->
+                change.consume()
+                dragDropState.onDrag(offset)
+            },
+            onDragStart = { offset -> dragDropState.onDragStart(offset) },
+            onDragEnd = { dragDropState.onDragInterrupted() },
+            onDragCancel = { dragDropState.onDragInterrupted() }
+        )
+    }
+}
+
+@Composable
+fun DraggableItem(
+    dragDropState: DragDropState,
+    index: Int,
+    content: @Composable (isDragging: Boolean) -> Unit
+) {
+    val dragging = index == dragDropState.draggingItemIndex
+
+    Box(
+        modifier = Modifier
+            .graphicsLayer {
+                translationY = if (dragging) dragDropState.draggedDistance else 0f
+                scaleX = if (dragging) 1.05f else 1f
+                scaleY = if (dragging) 1.05f else 1f
+                alpha = if (dragging) 0.8f else 1f
+            }
+            .zIndex(if (dragging) 1f else 0f)
+    ) {
+        content(dragging)
     }
 }
