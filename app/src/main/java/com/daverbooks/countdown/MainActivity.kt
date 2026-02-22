@@ -13,19 +13,23 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -40,59 +44,37 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Cake
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.Redeem
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberSwipeToDismissBoxState
-import androidx.compose.material3.rememberTimePickerState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.WbSunny
+import androidx.compose.material.icons.filled.Work
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -109,6 +91,11 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Collections
 import java.util.Locale
+import kotlin.math.roundToInt
+
+enum class PatternType {
+    NONE, BIRTHDAY, RETIREMENT, VALENTINE, ST_PATRICK, SOLSTICE, CHRISTMAS
+}
 
 data class Countdown(
     val id: Long,
@@ -118,7 +105,8 @@ data class Countdown(
     val createdAt: LocalDateTime = LocalDateTime.now(),
     val color: Color = Color.Gray,
     val isNotificationEnabled: Boolean = false,
-    val hasNotified: Boolean = false
+    val hasNotified: Boolean = false,
+    val patternType: PatternType = PatternType.NONE
 )
 
 enum class SortOption(val displayName: String) {
@@ -280,6 +268,12 @@ fun CountdownApp(
             Countdown(3, "Hour Plus", "", now.plusHours(1).plusMinutes(1).plusSeconds(1), now, PresetColors[9], isNotificationEnabled = true),
             Countdown(4, "Minute Plus", "This is a description that will be longer than one line to test the expansion logic. Tap the card to see more or less of it!", now.plusMinutes(1).plusSeconds(1), now, PresetColors[12]),
             Countdown(5, "Minute Ago", "", now.minusMinutes(1), now, PresetColors[15]),
+            Countdown(6, "Dad's Birthday", "Celebrating another great year!", now.plusMonths(2), now, PresetColors[1], patternType = PatternType.BIRTHDAY),
+            Countdown(7, "Retirement Party", "Enjoy your free time!", now.plusYears(1), now, PresetColors[14], patternType = PatternType.RETIREMENT),
+            Countdown(8, "Valentine's Day", "Lots of love", LocalDateTime.of(now.year + if (now.monthValue > 2 || (now.monthValue == 2 && now.dayOfMonth >= 14)) 1 else 0, 2, 14, 0, 0), now, PresetColors[1], patternType = PatternType.VALENTINE),
+            Countdown(9, "St. Patrick's Day", "Luck of the Irish", LocalDateTime.of(now.year + if (now.monthValue > 3 || (now.monthValue == 3 && now.dayOfMonth >= 17)) 1 else 0, 3, 17, 0, 0), now, PresetColors[9], patternType = PatternType.ST_PATRICK),
+            Countdown(10, "Summer Solstice", "Longest day of the year", LocalDateTime.of(now.year + if (now.monthValue > 6 || (now.monthValue == 6 && now.dayOfMonth >= 21)) 1 else 0, 6, 21, 0, 0), now, PresetColors[11], patternType = PatternType.SOLSTICE),
+            Countdown(11, "Christmas", "Merry Christmas!", LocalDateTime.of(now.year + if (now.monthValue == 12 && now.dayOfMonth >= 25) 1 else 0, 12, 25, 0, 0), now, PresetColors[0], patternType = PatternType.CHRISTMAS)
         )
     }
 
@@ -433,14 +427,15 @@ fun CountdownApp(
             CountdownDialog(
                 title = "Add New Countdown",
                 onDismiss = { showAddDialog = false },
-                onConfirm = { name, description, dateTime, color, isNotificationEnabled ->
+                onConfirm = { name, description, dateTime, color, isNotificationEnabled, patternType ->
                     val newCountdown = Countdown(
                         id = System.currentTimeMillis(),
                         name = name,
                         description = description,
                         targetDateTime = dateTime,
                         color = color,
-                        isNotificationEnabled = isNotificationEnabled
+                        isNotificationEnabled = isNotificationEnabled,
+                        patternType = patternType
                     )
                     countdowns = countdowns + newCountdown
                     showAddDialog = false
@@ -466,7 +461,7 @@ fun CountdownApp(
                 title = "Edit Countdown",
                 initialCountdown = countdown,
                 onDismiss = { editingCountdown = null },
-                onConfirm = { name, description, dateTime, color, isNotificationEnabled ->
+                onConfirm = { name, description, dateTime, color, isNotificationEnabled, patternType ->
                     countdowns = countdowns.map {
                         if (it.id == countdown.id) it.copy(
                             name = name, 
@@ -474,6 +469,7 @@ fun CountdownApp(
                             targetDateTime = dateTime, 
                             color = color,
                             isNotificationEnabled = isNotificationEnabled,
+                            patternType = patternType,
                             hasNotified = if (it.targetDateTime != dateTime) false else it.hasNotified
                         ) else it
                     }
@@ -593,7 +589,11 @@ fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -
         ),
         border = if (!isRunning) BorderStroke(1.dp, Color.DarkGray) else null
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
+        Box(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+            if (isRunning && countdown.patternType != PatternType.NONE) {
+                HolidayPattern(countdown.patternType)
+            }
+            
             Row(
                 modifier = Modifier.align(Alignment.TopEnd),
                 verticalAlignment = Alignment.CenterVertically
@@ -620,7 +620,7 @@ fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -
             }
 
             Column(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(16.dp).fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
@@ -686,6 +686,68 @@ fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -
 }
 
 @Composable
+fun HolidayPattern(type: PatternType) {
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val patternColor = Color.White.copy(alpha = 0.3f)
+        when (type) {
+            PatternType.BIRTHDAY -> {
+                for (i in 0..30) {
+                    val x = (i * 113f) % size.width
+                    val y = (i * 71f) % size.height
+                    drawCircle(patternColor, radius = 6f, center = Offset(x, y))
+                }
+            }
+            PatternType.VALENTINE -> {
+                for (i in 0..15) {
+                    val x = (i * 150f) % size.width
+                    val y = (i * 100f) % size.height
+                    drawCircle(patternColor, radius = 10f, center = Offset(x, y))
+                    drawCircle(patternColor, radius = 10f, center = Offset(x + 15f, y))
+                }
+            }
+            PatternType.ST_PATRICK -> {
+                for (i in 0..20) {
+                    val x = (i * 130f) % size.width
+                    val y = (i * 90f) % size.height
+                    drawCircle(patternColor, radius = 12f, center = Offset(x, y))
+                }
+            }
+            PatternType.CHRISTMAS -> {
+                for (i in -10..20) {
+                    val startX = i * 60f
+                    drawLine(
+                        patternColor,
+                        start = Offset(startX, 0f),
+                        end = Offset(startX + size.height, size.height),
+                        strokeWidth = 10f
+                    )
+                }
+            }
+            PatternType.SOLSTICE -> {
+                drawCircle(patternColor, radius = 60f, center = Offset(size.width / 2, size.height / 2))
+                for (i in 0..8) {
+                    val angle = (i * 45f) * (Math.PI / 180f).toFloat()
+                    val startX = size.width / 2 + 70f * Math.cos(angle.toDouble()).toFloat()
+                    val startY = size.height / 2 + 70f * Math.sin(angle.toDouble()).toFloat()
+                    val endX = size.width / 2 + 100f * Math.cos(angle.toDouble()).toFloat()
+                    val endY = size.height / 2 + 100f * Math.sin(angle.toDouble()).toFloat()
+                    drawLine(patternColor, Offset(startX, startY), Offset(endX, endY), strokeWidth = 8f)
+                }
+            }
+            PatternType.RETIREMENT -> {
+                for (i in 0..15) {
+                    val x = (i * 180f) % size.width
+                    val y = (i * 120f) % size.height
+                    drawLine(patternColor, Offset(x, y), Offset(x + 30f, y + 30f), strokeWidth = 5f)
+                    drawLine(patternColor, Offset(x + 30f, y), Offset(x, y + 30f), strokeWidth = 5f)
+                }
+            }
+            else -> {}
+        }
+    }
+}
+
+@Composable
 fun CountdownUnit(value: Long, singular: String, plural: String, contentColor: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
@@ -724,13 +786,14 @@ fun CountdownDialog(
     title: String,
     initialCountdown: Countdown? = null,
     onDismiss: () -> Unit,
-    onConfirm: (String, String, LocalDateTime, Color, Boolean) -> Unit,
+    onConfirm: (String, String, LocalDateTime, Color, Boolean, PatternType) -> Unit,
     onDelete: (() -> Unit)? = null
 ) {
     var name by remember { mutableStateOf(initialCountdown?.name ?: "") }
     var description by remember { mutableStateOf(initialCountdown?.description ?: "") }
     var selectedColor by remember { mutableStateOf(initialCountdown?.color ?: PresetColors[0]) }
     var isNotificationEnabled by remember { mutableStateOf(initialCountdown?.isNotificationEnabled ?: false) }
+    var patternType by remember { mutableStateOf(initialCountdown?.patternType ?: PatternType.NONE) }
     
     val nowDateTime = LocalDateTime.now()
     val initialDateTime = initialCountdown?.targetDateTime ?: nowDateTime
@@ -801,38 +864,66 @@ fun CountdownDialog(
                     )
                 }
 
-                Text("Quick Add", style = MaterialTheme.typography.labelLarge)
-                Row(
+                Text("Special Theme", style = MaterialTheme.typography.labelLarge)
+                LazyRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(vertical = 4.dp)
                 ) {
-                    AssistChip(
-                        onClick = {
-                            val current = LocalDateTime.of(selectedDate, selectedTime)
-                            val newDt = current.plusHours(1)
-                            selectedDate = newDt.toLocalDate()
-                            selectedTime = newDt.toLocalTime()
-                        },
-                        label = { Text("+1 Hour") }
-                    )
-                    AssistChip(
-                        onClick = {
-                            val current = LocalDateTime.of(selectedDate, selectedTime)
-                            val newDt = current.plusDays(1)
-                            selectedDate = newDt.toLocalDate()
-                            selectedTime = newDt.toLocalTime()
-                        },
-                        label = { Text("+1 Day") }
-                    )
-                    AssistChip(
-                        onClick = {
-                            val current = LocalDateTime.of(selectedDate, selectedTime)
-                            val newDt = current.plusWeeks(1)
-                            selectedDate = newDt.toLocalDate()
-                            selectedTime = newDt.toLocalTime()
-                        },
-                        label = { Text("+1 Week") }
-                    )
+                    item {
+                        FilterChip(
+                            selected = patternType == PatternType.NONE,
+                            onClick = { patternType = PatternType.NONE },
+                            label = { Text("None") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = patternType == PatternType.BIRTHDAY,
+                            onClick = { patternType = PatternType.BIRTHDAY },
+                            label = { Text("Birthday") },
+                            leadingIcon = { Icon(Icons.Default.Cake, null, Modifier.size(18.dp)) }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = patternType == PatternType.RETIREMENT,
+                            onClick = { patternType = PatternType.RETIREMENT },
+                            label = { Text("Retirement") },
+                            leadingIcon = { Icon(Icons.Default.Work, null, Modifier.size(18.dp)) }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = patternType == PatternType.VALENTINE,
+                            onClick = { patternType = PatternType.VALENTINE },
+                            label = { Text("Valentine's") },
+                            leadingIcon = { Icon(Icons.Default.Favorite, null, Modifier.size(18.dp)) }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = patternType == PatternType.ST_PATRICK,
+                            onClick = { patternType = PatternType.ST_PATRICK },
+                            label = { Text("St. Paddy's") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = patternType == PatternType.SOLSTICE,
+                            onClick = { patternType = PatternType.SOLSTICE },
+                            label = { Text("Solstice") },
+                            leadingIcon = { Icon(Icons.Default.WbSunny, null, Modifier.size(18.dp)) }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = patternType == PatternType.CHRISTMAS,
+                            onClick = { patternType = PatternType.CHRISTMAS },
+                            label = { Text("Christmas") },
+                            leadingIcon = { Icon(Icons.Default.Redeem, null, Modifier.size(18.dp)) }
+                        )
+                    }
                 }
 
                 Text("Pick a Color", style = MaterialTheme.typography.labelLarge)
@@ -866,7 +957,7 @@ fun CountdownDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    onConfirm(name, description, LocalDateTime.of(selectedDate, selectedTime), selectedColor, isNotificationEnabled)
+                    onConfirm(name, description, LocalDateTime.of(selectedDate, selectedTime), selectedColor, isNotificationEnabled, patternType)
                 },
                 enabled = name.isNotBlank()
             ) {

@@ -30,3 +30,5 @@
 - [2023-10-27 12:15:00] Add individual notification setting for each timer to trigger an alarm when it finishes. (Status: COMPLETED)
 - [2023-10-27 12:20:00] Implement "Dark Mode" setting. (Status: COMPLETED)
 - [2023-10-27 12:25:00] Update finished timer appearance: maintain original color but muted, add dark gray outline, and stop turning to light gray. (Status: COMPLETED)
+- [2023-10-27 12:30:00] Add interesting background patterns for special days like birthdays, retirement, US holidays (Valentine's, St. Patrick's, Solstice, Christmas). (Status: COMPLETED)
+- [2023-10-27 12:35:00] Fix background patterns not showing and add test examples for holidays at startup. (Status: IN_PROGRESS)
