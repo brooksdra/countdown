@@ -207,9 +207,7 @@ fun CountdownApp(
     
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
-    ) { _ ->
-        // Permission result ignored as we check permission status on demand
-    }
+    ) { _ -> }
 
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -231,7 +229,6 @@ fun CountdownApp(
         }
     }
 
-    // Single source of time for all countdowns
     val currentTime by produceState(initialValue = LocalDateTime.now()) {
         while (true) {
             delay(1000)
@@ -239,7 +236,6 @@ fun CountdownApp(
         }
     }
 
-    // Check for finished timers and trigger notifications
     LaunchedEffect(currentTime) {
         countdowns.forEach { countdown ->
             if (countdown.isNotificationEnabled && !countdown.hasNotified) {
@@ -259,7 +255,7 @@ fun CountdownApp(
             Countdown(1, "Long Countdown", "", LocalDateTime.of(2026, 7, 10, 17, 0, 0), now, PresetColors[0], isNotificationEnabled = true),
             Countdown(2, "Day Plus", "", now.plusDays(1).plusHours(1).plusMinutes(1).plusSeconds(1), now, PresetColors[5]),
             Countdown(3, "Hour Plus", "", now.plusHours(1).plusMinutes(1).plusSeconds(1), now, PresetColors[9], isNotificationEnabled = true),
-            Countdown(4, "Minute Plus", "This is a description that will be longer than one line to test the expansion logic. Tap the card to see more or less of it!", now.plusMinutes(1).plusSeconds(1), now, PresetColors[12]),
+            Countdown(4, "Minute Plus", "This is a description that will be longer than one line to test the expansion logic.", now.plusMinutes(1).plusSeconds(1), now, PresetColors[12]),
             Countdown(5, "Minute Ago", "", now.minusMinutes(1), now, PresetColors[15]),
             Countdown(6, "Dad's Birthday", "Celebrating another great year!", now.plusMonths(2), now, PresetColors[1], patternType = PatternType.BIRTHDAY),
             Countdown(7, "Retirement Party", "Enjoy your free time!", now.plusYears(1), now, PresetColors[14], patternType = PatternType.RETIREMENT),
@@ -395,11 +391,13 @@ fun CountdownApp(
                                             .padding(horizontal = 20.dp),
                                         contentAlignment = Alignment.CenterEnd
                                     ) {
-                                        Icon(
-                                            Icons.Default.Delete,
-                                            contentDescription = "Delete",
-                                            tint = Color.White
-                                        )
+                                        if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
+                                            Icon(
+                                                Icons.Default.Delete,
+                                                contentDescription = "Delete",
+                                                tint = Color.White
+                                            )
+                                        }
                                     }
                                 }
                             ) {
