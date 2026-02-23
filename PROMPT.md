@@ -35,3 +35,4 @@
 - [2026-02-22 12:40:00] Fix background patterns visibility, drawing logic, and resolve code warnings. (Status: COMPLETED)
 - [2026-02-22 12:45:00] Completely remove delete IconButton from cards to rely solely on swipe and edit dialog. (Status: COMPLETED)
 - [2026-02-22 12:50:00] Fix "ghost" delete icon showing through cards in dark mode during drag/dismiss. (Status: COMPLETED)
+- [2026-02-22 22:15:00] Add a note in AGENT.md file to always keep the PROMPT.md file up-to-date with the current timestamp and the current prompts for every prompt. (Status: COMPLETED)
