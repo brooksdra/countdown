@@ -36,3 +36,5 @@
 - [2026-02-22 12:45:00] Completely remove delete IconButton from cards to rely solely on swipe and edit dialog. (Status: COMPLETED)
 - [2026-02-22 12:50:00] Fix "ghost" delete icon showing through cards in dark mode during drag/dismiss. (Status: COMPLETED)
 - [2026-02-22 22:15:00] Add a note in AGENT.md file to always keep the PROMPT.md file up-to-date with the current timestamp and the current prompts for every prompt. (Status: COMPLETED)
+- [2026-02-22 22:20:00] Please add a help system with instructions on how to use the application. (Status: COMPLETED)
+- [2026-02-22 22:25:00] Fix "ghost" delete icon showing through cards in dark mode during swipe. (Status: IN_PROGRESS)

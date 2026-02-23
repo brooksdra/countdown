@@ -40,8 +40,11 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Cake
@@ -67,7 +70,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -197,6 +200,7 @@ fun CountdownApp(
     
     var showAddDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showHelpDialog by remember { mutableStateOf(false) }
     var editingCountdown by remember { mutableStateOf<Countdown?>(null) }
     var swipedCountdownToDelete by remember { mutableStateOf<Countdown?>(null) }
     
@@ -272,8 +276,13 @@ fun CountdownApp(
             CenterAlignedTopAppBar(
                 title = { Text(appTitle) },
                 navigationIcon = {
-                    IconButton(onClick = { showSettingsDialog = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                    Row {
+                        IconButton(onClick = { showSettingsDialog = true }) {
+                            Icon(Icons.Default.Settings, contentDescription = "Settings")
+                        }
+                        IconButton(onClick = { showHelpDialog = true }) {
+                            Icon(Icons.AutoMirrored.Filled.Help, contentDescription = "Help")
+                        }
                     }
                 },
                 actions = {
@@ -448,6 +457,10 @@ fun CountdownApp(
             )
         }
 
+        if (showHelpDialog) {
+            HelpDialog(onDismiss = { showHelpDialog = false })
+        }
+
         editingCountdown?.let { countdown ->
             CountdownDialog(
                 title = "Edit Countdown",
@@ -552,6 +565,48 @@ fun SettingsDialog(
 }
 
 @Composable
+fun HelpDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("How to Use") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("Welcome to MyCountDown!", fontWeight = FontWeight.Bold)
+                
+                Text("1. Adding Timers", fontWeight = FontWeight.SemiBold)
+                Text("Tap the '+' button at the bottom right to create a new countdown. You can set a name, description, date, time, and choose a color or special theme.")
+                
+                Text("2. Quick Add", fontWeight = FontWeight.SemiBold)
+                Text("Use the '+1 Hour', '+1 Day', or '+1 Week' chips in the Add dialog to quickly advance the target time.")
+                
+                Text("3. Editing", fontWeight = FontWeight.SemiBold)
+                Text("Tap the 'Edit' pencil icon on any card to change its details or delete it permanently.")
+                
+                Text("4. Deleting", fontWeight = FontWeight.SemiBold)
+                Text("Swipe any card from right-to-left to delete it. Running timers will ask for confirmation first.")
+                
+                Text("5. Reordering", fontWeight = FontWeight.SemiBold)
+                Text("Select 'Manual' from the Sort Options menu (top right), then long-press and drag any card by its handle to reorder the list.")
+                
+                Text("6. Expansion", fontWeight = FontWeight.SemiBold)
+                Text("Tap on a card to expand or collapse its description.")
+                
+                Text("7. Settings", fontWeight = FontWeight.SemiBold)
+                Text("Use the sprocket icon (top left) to change the app title or toggle Dark Mode.")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Got it!")
+            }
+        }
+    )
+}
+
+@Composable
 fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -> Unit, showDragHandle: Boolean = false, isDarkMode: Boolean = false) {
     var expanded by remember { mutableStateOf(false) }
     val duration = Duration.between(currentTime, countdown.targetDateTime)
@@ -560,7 +615,7 @@ fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -
     val backgroundColor = if (isRunning) {
         countdown.color
     } else {
-        countdown.color.copy(alpha = 0.4f)
+        countdown.color.copy(alpha = 1f).compositeOver(if (isDarkMode) Color.Black else Color.White).copy(alpha = 0.4f).compositeOver(if (isDarkMode) Color.Black else Color.White)
     }
     
     val contentColor = if (isRunning) {
@@ -627,7 +682,7 @@ fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -
                         text = countdown.description,
                         fontSize = 14.sp,
                         color = contentColor.copy(alpha = 0.8f),
-                        maxLines = if (expanded) { 10 } else { 1 },
+                        maxLines = if (expanded) 10 else 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -1090,11 +1145,11 @@ class DragDropState(
     val lazyListState: LazyListState,
     private val onMove: (Int, Int) -> Unit
 ) {
-    var draggedDistance by mutableStateOf(0f)
+    var draggedDistance by mutableFloatStateOf(0f)
     var draggingItemIndex by mutableStateOf<Int?>(null)
     var initiallyDraggedElement by mutableStateOf<LazyListItemInfo?>(null)
 
-    fun onDragStart(offset: androidx.compose.ui.geometry.Offset) {
+    fun onDragStart(offset: Offset) {
         lazyListState.layoutInfo.visibleItemsInfo
             .firstOrNull { item ->
                 offset.y.toInt() in item.offset..(item.offset + item.size)
@@ -1110,7 +1165,7 @@ class DragDropState(
         draggedDistance = 0f
     }
 
-    fun onDrag(offset: androidx.compose.ui.geometry.Offset) {
+    fun onDrag(offset: Offset) {
         draggedDistance += offset.y
 
         val initialElement = initiallyDraggedElement ?: return
