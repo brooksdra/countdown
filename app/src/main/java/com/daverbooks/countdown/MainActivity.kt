@@ -766,7 +766,14 @@ fun HolidayPattern(type: PatternType) {
                 for (i in 0..20) {
                     val x = (i * 130f) % size.width
                     val y = (i * 90f) % size.height
-                    drawCircle(patternColor, radius = 12f, center = Offset(x, y))
+                    // Draw a simple four-leaf clover
+                    val leafSize = 15f
+                    drawCircle(patternColor, radius = leafSize, center = Offset(x - leafSize, y - leafSize))
+                    drawCircle(patternColor, radius = leafSize, center = Offset(x + leafSize, y - leafSize))
+                    drawCircle(patternColor, radius = leafSize, center = Offset(x - leafSize, y + leafSize))
+                    drawCircle(patternColor, radius = leafSize, center = Offset(x + leafSize, y + leafSize))
+                    // Stem
+                    drawLine(patternColor, start = Offset(x, y), end = Offset(x, y + leafSize * 2.5f), strokeWidth = 4f)
                 }
             }
             PatternType.CHRISTMAS -> {
