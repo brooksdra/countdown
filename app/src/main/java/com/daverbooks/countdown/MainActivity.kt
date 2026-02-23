@@ -64,6 +64,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -699,10 +700,16 @@ fun HolidayPattern(type: PatternType) {
             }
             PatternType.VALENTINE -> {
                 for (i in 0..15) {
-                    val x = (i * 150f) % size.width
-                    val y = (i * 100f) % size.height
-                    drawCircle(patternColor, radius = 10f, center = Offset(x, y))
-                    drawCircle(patternColor, radius = 10f, center = Offset(x + 15f, y))
+                    val x = (i * 150f + (i % 3) * 40f) % size.width
+                    val y = (i * 100f + (i % 2) * 50f) % size.height
+                    val heartSize = 40f
+                    val path = Path().apply {
+                        moveTo(x, y + heartSize / 4)
+                        cubicTo(x - heartSize / 2, y - heartSize / 4, x - heartSize, y + heartSize / 2, x, y + heartSize)
+                        cubicTo(x + heartSize, y + heartSize / 2, x + heartSize / 2, y - heartSize / 4, x, y + heartSize / 4)
+                        close()
+                    }
+                    drawPath(path, patternColor)
                 }
             }
             PatternType.ST_PATRICK -> {
