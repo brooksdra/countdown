@@ -92,7 +92,8 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Collections
 import java.util.Locale
-import kotlin.math.roundToInt
+import kotlin.math.cos
+import kotlin.math.sin
 
 enum class PatternType {
     NONE, BIRTHDAY, RETIREMENT, VALENTINE, ST_PATRICK, SOLSTICE, CHRISTMAS
@@ -203,20 +204,11 @@ fun CountdownApp(
     var isAscending by remember { mutableStateOf(true) }
 
     val context = LocalContext.current
-    var hasNotificationPermission by remember {
-        mutableStateOf(
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-            } else {
-                true
-            }
-        )
-    }
-
+    
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        hasNotificationPermission = isGranted
+    ) { _ ->
+        // Permission result ignored as we check permission status on demand
     }
 
     LaunchedEffect(Unit) {
@@ -415,7 +407,8 @@ fun CountdownApp(
                                     countdown = countdown,
                                     currentTime = currentTime,
                                     onEdit = { editingCountdown = countdown },
-                                    showDragHandle = currentSortOption == SortOption.MANUAL
+                                    showDragHandle = currentSortOption == SortOption.MANUAL,
+                                    isDarkMode = isDarkMode
                                 )
                             }
                         }
@@ -561,7 +554,7 @@ fun SettingsDialog(
 }
 
 @Composable
-fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -> Unit, showDragHandle: Boolean = false) {
+fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -> Unit, showDragHandle: Boolean = false, isDarkMode: Boolean = false) {
     var expanded by remember { mutableStateOf(false) }
     val duration = Duration.between(currentTime, countdown.targetDateTime)
     val isRunning = !duration.isNegative
@@ -575,7 +568,7 @@ fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -
     val contentColor = if (isRunning) {
         Color.White
     } else {
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        if (isDarkMode) Color.LightGray.copy(alpha = 0.7f) else Color.DarkGray.copy(alpha = 0.7f)
     }
 
     Card(
@@ -588,7 +581,7 @@ fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -
             containerColor = backgroundColor,
             contentColor = contentColor
         ),
-        border = if (!isRunning) BorderStroke(1.dp, Color.DarkGray) else null
+        border = if (!isRunning) BorderStroke(1.dp, if (isDarkMode) Color.Gray else Color.DarkGray) else null
     ) {
         Box(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
             if (isRunning && countdown.patternType != PatternType.NONE) {
@@ -689,19 +682,23 @@ fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -
 @Composable
 fun HolidayPattern(type: PatternType) {
     Canvas(modifier = Modifier.fillMaxSize()) {
-        val patternColor = Color.White.copy(alpha = 0.3f)
+        val patternColor = Color.White.copy(alpha = 0.35f)
         when (type) {
             PatternType.BIRTHDAY -> {
-                for (i in 0..30) {
-                    val x = (i * 113f) % size.width
-                    val y = (i * 71f) % size.height
-                    drawCircle(patternColor, radius = 6f, center = Offset(x, y))
+                for (i in 0..40) {
+                    val x = (i * 137f) % size.width
+                    val y = (i * 83f) % size.height
+                    if (i % 2 == 0) {
+                        drawRect(patternColor, Offset(x, y), size = Size(12f, 12f))
+                    } else {
+                        drawCircle(patternColor, radius = 6f, center = Offset(x, y))
+                    }
                 }
             }
             PatternType.VALENTINE -> {
-                for (i in 0..15) {
-                    val x = (i * 150f + (i % 3) * 40f) % size.width
-                    val y = (i * 100f + (i % 2) * 50f) % size.height
+                for (i in 0..20) {
+                    val x = (i * 173f + (i % 5) * 20f) % size.width
+                    val y = (i * 113f + (i % 3) * 30f) % size.height
                     val heartSize = 40f
                     val path = Path().apply {
                         moveTo(x, y + heartSize / 4)
@@ -734,10 +731,10 @@ fun HolidayPattern(type: PatternType) {
                 drawCircle(patternColor, radius = 60f, center = Offset(size.width / 2, size.height / 2))
                 for (i in 0..8) {
                     val angle = (i * 45f) * (Math.PI / 180f).toFloat()
-                    val startX = size.width / 2 + 70f * Math.cos(angle.toDouble()).toFloat()
-                    val startY = size.height / 2 + 70f * Math.sin(angle.toDouble()).toFloat()
-                    val endX = size.width / 2 + 100f * Math.cos(angle.toDouble()).toFloat()
-                    val endY = size.height / 2 + 100f * Math.sin(angle.toDouble()).toFloat()
+                    val startX = size.width / 2 + 70f * cos(angle.toDouble()).toFloat()
+                    val startY = size.height / 2 + 70f * sin(angle.toDouble()).toFloat()
+                    val endX = size.width / 2 + 100f * cos(angle.toDouble()).toFloat()
+                    val endY = size.height / 2 + 100f * sin(angle.toDouble()).toFloat()
                     drawLine(patternColor, Offset(startX, startY), Offset(endX, endY), strokeWidth = 8f)
                 }
             }
