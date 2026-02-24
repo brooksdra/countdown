@@ -1,6 +1,7 @@
 package com.daverbooks.countdown
 
 import android.app.AlarmManager
+import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -23,13 +24,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListItemInfo
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -49,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -59,13 +55,15 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import androidx.core.app.NotificationCompat
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.room.*
 import com.daverbooks.countdown.ui.theme.MyCountDownTheme
 import kotlinx.coroutines.delay
-import java.time.Duration
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.LocalTime
-import java.time.ZoneId
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
+import java.time.*
 import java.time.format.DateTimeFormatter
 import java.util.Collections
 import java.util.Locale
@@ -76,18 +74,91 @@ enum class PatternType {
     NONE, BIRTHDAY, RETIREMENT, VALENTINE, ST_PATRICK, SOLSTICE, CHRISTMAS
 }
 
+@Entity(tableName = "countdowns")
 data class Countdown(
-    val id: Long,
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val description: String,
     val targetDateTime: LocalDateTime,
     val createdAt: LocalDateTime = LocalDateTime.now(),
-    val color: Color = Color.Gray,
+    val colorArgb: Int,
     val isNotificationEnabled: Boolean = false,
     val hasNotified: Boolean = false,
     val patternType: PatternType = PatternType.NONE,
-    val isFavorite: Boolean = false
-)
+    val isFavorite: Boolean = false,
+    val manualOrder: Int = 0
+) {
+    @get:Ignore
+    val color: Color get() = Color(colorArgb)
+}
+
+class Converters {
+    @TypeConverter
+    fun fromTimestamp(value: Long?): LocalDateTime? {
+        return value?.let { LocalDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneId.systemDefault()) }
+    }
+
+    @TypeConverter
+    fun dateToTimestamp(date: LocalDateTime?): Long? {
+        return date?.atZone(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
+    }
+
+    @TypeConverter
+    fun fromPatternType(value: PatternType): String {
+        return value.name
+    }
+
+    @TypeConverter
+    fun toPatternType(value: String): PatternType {
+        return PatternType.valueOf(value)
+    }
+}
+
+@Dao
+interface CountdownDao {
+    @Query("SELECT * FROM countdowns ORDER BY manualOrder ASC")
+    fun getAllCountdowns(): Flow<List<Countdown>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(countdown: Countdown): Long
+
+    @Update
+    suspend fun update(countdown: Countdown)
+
+    @Delete
+    suspend fun delete(countdown: Countdown)
+
+    @Query("SELECT MAX(manualOrder) FROM countdowns")
+    suspend fun getMaxOrder(): Int?
+
+    @Transaction
+    suspend fun updateAll(countdowns: List<Countdown>) {
+        countdowns.forEach { update(it) }
+    }
+}
+
+@Database(entities = [Countdown::class], version = 1, exportSchema = false)
+@TypeConverters(Converters::class)
+abstract class CountdownDatabase : RoomDatabase() {
+    abstract fun countdownDao(): CountdownDao
+
+    companion object {
+        @Volatile
+        private var INSTANCE: CountdownDatabase? = null
+
+        fun getDatabase(context: Context): CountdownDatabase {
+            return INSTANCE ?: synchronized(this) {
+                val instance = Room.databaseBuilder(
+                    context.applicationContext,
+                    CountdownDatabase::class.java,
+                    "countdown_database"
+                ).build()
+                INSTANCE = instance
+                instance
+            }
+        }
+    }
+}
 
 enum class SortOption(val displayName: String) {
     MANUAL("Manual"),
@@ -124,7 +195,7 @@ class CountdownReceiver : BroadcastReceiver() {
                 triggerNotification(context, name, id)
             }
             Intent.ACTION_BOOT_COMPLETED -> {
-                // Rescheduling logic would go here in a production app with a database.
+                // In a production app, rescheduling logic would typically happen here.
             }
         }
     }
@@ -147,11 +218,13 @@ private fun scheduleAlarm(context: Context, countdown: Countdown) {
     
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         if (!alarmManager.canScheduleExactAlarms()) {
-            Toast.makeText(context, "Please grant permission to schedule exact alarms.", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Permission to schedule exact alarms required.", Toast.LENGTH_LONG).show()
             try {
-                context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+                val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
             } catch (e: Exception) {
-                // Activity not found
+                // Activity not found or not supported
             }
             return
         }
@@ -172,14 +245,16 @@ private fun scheduleAlarm(context: Context, countdown: Countdown) {
 
     val triggerTime = countdown.targetDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
     
-    try {
-        alarmManager.setExactAndAllowWhileIdle(
-            AlarmManager.RTC_WAKEUP,
-            triggerTime,
-            pendingIntent
-        )
-    } catch (e: SecurityException) {
-        Toast.makeText(context, "Exact alarm permission denied.", Toast.LENGTH_SHORT).show()
+    if (triggerTime > System.currentTimeMillis()) {
+        try {
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                triggerTime,
+                pendingIntent
+            )
+        } catch (e: SecurityException) {
+            Toast.makeText(context, "Exact alarm permission denied.", Toast.LENGTH_SHORT).show()
+        }
     }
 }
 
@@ -196,6 +271,66 @@ private fun cancelAlarm(context: Context, countdown: Countdown) {
     )
     if (pendingIntent != null) {
         alarmManager.cancel(pendingIntent)
+    }
+}
+
+class CountdownViewModel(application: Application) : AndroidViewModel(application) {
+    private val db = CountdownDatabase.getDatabase(application)
+    private val dao = db.countdownDao()
+
+    val countdowns = dao.getAllCountdowns()
+
+    fun addCountdown(name: String, description: String, dateTime: LocalDateTime, color: Color, isNotificationEnabled: Boolean, patternType: PatternType, isFavorite: Boolean) {
+        viewModelScope.launch {
+            val maxOrder = dao.getMaxOrder() ?: 0
+            val countdown = Countdown(
+                name = name,
+                description = description,
+                targetDateTime = dateTime,
+                colorArgb = color.toArgb(),
+                isNotificationEnabled = isNotificationEnabled,
+                patternType = patternType,
+                isFavorite = isFavorite,
+                manualOrder = maxOrder + 1
+            )
+            val id = dao.insert(countdown)
+            if (isNotificationEnabled) {
+                scheduleAlarm(getApplication(), countdown.copy(id = id))
+            }
+        }
+    }
+
+    fun updateCountdown(countdown: Countdown) {
+        viewModelScope.launch {
+            dao.update(countdown)
+            if (countdown.isNotificationEnabled) {
+                scheduleAlarm(getApplication(), countdown)
+            } else {
+                cancelAlarm(getApplication(), countdown)
+            }
+        }
+    }
+
+    fun deleteCountdown(countdown: Countdown) {
+        viewModelScope.launch {
+            cancelAlarm(getApplication(), countdown)
+            dao.delete(countdown)
+        }
+    }
+
+    fun toggleFavorite(countdown: Countdown) {
+        viewModelScope.launch {
+            dao.update(countdown.copy(isFavorite = !countdown.isFavorite))
+        }
+    }
+
+    fun reorder(updatedList: List<Countdown>) {
+        viewModelScope.launch {
+            val newList = updatedList.mapIndexed { index, countdown ->
+                countdown.copy(manualOrder = index)
+            }
+            dao.updateAll(newList)
+        }
     }
 }
 
@@ -239,10 +374,11 @@ fun CountdownApp(
     appTitle: String,
     onTitleChange: (String) -> Unit,
     isDarkMode: Boolean,
-    onDarkModeChange: (Boolean) -> Unit
+    onDarkModeChange: (Boolean) -> Unit,
+    viewModel: CountdownViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    var countdowns by remember { mutableStateOf(listOf<Countdown>()) }
+    val countdowns by viewModel.countdowns.collectAsState(initial = emptyList())
     
     var showAddDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -272,7 +408,7 @@ fun CountdownApp(
             SortOption.TARGET_DATE -> countdowns.sortedBy { it.targetDateTime }
             SortOption.NAME -> countdowns.sortedBy { it.name.lowercase() }
             SortOption.CREATED_AT -> countdowns.sortedBy { it.createdAt }
-            SortOption.MANUAL -> countdowns
+            SortOption.MANUAL -> countdowns.sortedBy { it.manualOrder }
         }
         val finalSorted = if (isAscending || currentSortOption == SortOption.MANUAL) baseSorted else baseSorted.reversed()
         
@@ -287,29 +423,6 @@ fun CountdownApp(
         while (true) {
             delay(1000)
             value = LocalDateTime.now()
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        val now = LocalDateTime.now()
-        val initialCountdowns = listOf(
-            Countdown(1, "Long Countdown", "", LocalDateTime.of(2026, 7, 10, 17, 0, 0), now, PresetColors[0], isNotificationEnabled = true),
-            Countdown(2, "Day Plus", "", now.plusDays(1).plusHours(1).plusMinutes(1).plusSeconds(1), now, PresetColors[5], isFavorite = true),
-            Countdown(3, "Hour Plus", "", now.plusHours(1).plusMinutes(1).plusSeconds(1), now, PresetColors[9], isNotificationEnabled = true),
-            Countdown(4, "Minute Plus", "This is a description that will be longer than one line to test the expansion logic.", now.plusMinutes(1).plusSeconds(1), now, PresetColors[12]),
-            Countdown(5, "Minute Ago", "", now.minusMinutes(1), now, PresetColors[15]),
-            Countdown(6, "Dad's Birthday", "Celebrating another great year!", now.plusMonths(2), now, PresetColors[1], patternType = PatternType.BIRTHDAY),
-            Countdown(7, "Retirement Party", "Enjoy your free time!", now.plusYears(1), now, PresetColors[14], patternType = PatternType.RETIREMENT),
-            Countdown(8, "Valentine's Day", "Lots of love", LocalDateTime.of(now.year + if (now.monthValue > 2 || (now.monthValue == 2 && now.dayOfMonth >= 14)) 1 else 0, 2, 14, 0, 0), now, PresetColors[1], patternType = PatternType.VALENTINE, isFavorite = true),
-            Countdown(9, "St. Patrick's Day", "Luck of the Irish", LocalDateTime.of(now.year + if (now.monthValue > 3 || (now.monthValue == 3 && now.dayOfMonth >= 17)) 1 else 0, 3, 17, 0, 0), now, PresetColors[9], patternType = PatternType.ST_PATRICK),
-            Countdown(10, "Summer Solstice", "Longest day of the year", LocalDateTime.of(now.year + if (now.monthValue > 6 || (now.monthValue == 6 && now.dayOfMonth >= 21)) 1 else 0, 6, 21, 0, 0), now, PresetColors[11], patternType = PatternType.SOLSTICE),
-            Countdown(11, "Christmas", "Merry Christmas!", LocalDateTime.of(now.year + if (now.monthValue == 12 && now.dayOfMonth >= 25) 1 else 0, 12, 25, 0, 0), now, PresetColors[0], patternType = PatternType.CHRISTMAS)
-        )
-        countdowns = initialCountdowns
-        initialCountdowns.forEach { 
-            if (it.isNotificationEnabled && it.targetDateTime.isAfter(now)) {
-                scheduleAlarm(context, it)
-            }
         }
     }
 
@@ -408,9 +521,9 @@ fun CountdownApp(
             } else {
                 val listState = rememberLazyListState()
                 val dragDropState = rememberDragDropState(listState) { fromIndex, toIndex ->
-                    val newList = countdowns.toMutableList()
+                    val newList = displayCountdowns.toMutableList()
                     Collections.swap(newList, fromIndex, toIndex)
-                    countdowns = newList
+                    viewModel.reorder(newList)
                 }
 
                 LazyColumn(
@@ -431,8 +544,7 @@ fun CountdownApp(
                                             swipedCountdownToDelete = countdown
                                             false
                                         } else {
-                                            cancelAlarm(context, countdown)
-                                            countdowns = countdowns.filter { it.id != countdown.id }
+                                            viewModel.deleteCountdown(countdown)
                                             true
                                         }
                                     } else {
@@ -467,11 +579,7 @@ fun CountdownApp(
                                     countdown = countdown,
                                     currentTime = currentTime,
                                     onEdit = { editingCountdown = countdown },
-                                    onFavoriteToggle = {
-                                        countdowns = countdowns.map { 
-                                            if (it.id == countdown.id) it.copy(isFavorite = !it.isFavorite) else it
-                                        }
-                                    },
+                                    onFavoriteToggle = { viewModel.toggleFavorite(countdown) },
                                     showDragHandle = currentSortOption == SortOption.MANUAL,
                                     isDarkMode = isDarkMode
                                 )
@@ -487,20 +595,7 @@ fun CountdownApp(
                 title = "Add New Countdown",
                 onDismiss = { showAddDialog = false },
                 onConfirm = { name, description, dateTime, color, isNotificationEnabled, patternType, isFavorite ->
-                    val newCountdown = Countdown(
-                        id = System.currentTimeMillis(),
-                        name = name,
-                        description = description,
-                        targetDateTime = dateTime,
-                        color = color,
-                        isNotificationEnabled = isNotificationEnabled,
-                        patternType = patternType,
-                        isFavorite = isFavorite
-                    )
-                    countdowns = countdowns + newCountdown
-                    if (isNotificationEnabled) {
-                        scheduleAlarm(context, newCountdown)
-                    }
+                    viewModel.addCountdown(name, description, dateTime, color, isNotificationEnabled, patternType, isFavorite)
                     showAddDialog = false
                 }
             )
@@ -529,29 +624,20 @@ fun CountdownApp(
                 initialCountdown = countdown,
                 onDismiss = { editingCountdown = null },
                 onConfirm = { name, description, dateTime, color, isNotificationEnabled, patternType, isFavorite ->
-                    val updatedCountdown = countdown.copy(
+                    viewModel.updateCountdown(countdown.copy(
                         name = name, 
                         description = description, 
                         targetDateTime = dateTime, 
-                        color = color,
+                        colorArgb = color.toArgb(),
                         isNotificationEnabled = isNotificationEnabled,
                         patternType = patternType,
                         isFavorite = isFavorite,
                         hasNotified = if (countdown.targetDateTime != dateTime) false else countdown.hasNotified
-                    )
-                    countdowns = countdowns.map {
-                        if (it.id == countdown.id) updatedCountdown else it
-                    }
-                    if (isNotificationEnabled) {
-                        scheduleAlarm(context, updatedCountdown)
-                    } else {
-                        cancelAlarm(context, countdown)
-                    }
+                    ))
                     editingCountdown = null
                 },
                 onDelete = {
-                    cancelAlarm(context, countdown)
-                    countdowns = countdowns.filter { it.id != countdown.id }
+                    viewModel.deleteCountdown(countdown)
                     editingCountdown = null
                 }
             )
@@ -564,8 +650,7 @@ fun CountdownApp(
                 text = { Text("Are you sure you want to delete the running countdown \"${countdown.name}\"?") },
                 confirmButton = {
                     TextButton(onClick = {
-                        cancelAlarm(context, countdown)
-                        countdowns = countdowns.filter { it.id != countdown.id }
+                        viewModel.deleteCountdown(countdown)
                         swipedCountdownToDelete = null
                     }) {
                         Text("Delete", color = MaterialTheme.colorScheme.error)
@@ -780,8 +865,9 @@ fun CountdownCard(
                 }
 
                 if (!isRunning) {
+                    val finishedText = if (duration.isNegative) "Finished" else "Just now"
                     Text(
-                        text = "Finished",
+                        text = finishedText,
                         fontSize = 28.sp,
                         fontWeight = FontWeight.ExtraBold,
                         textAlign = TextAlign.Center,
