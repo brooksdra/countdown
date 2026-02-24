@@ -1,32 +1,28 @@
 package com.daverbooks.countdown
 
+import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.lazy.LazyListState
@@ -40,21 +36,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Cake
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.NotificationsOff
-import androidx.compose.material.icons.filled.Redeem
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.material.icons.filled.WbSunny
-import androidx.compose.material.icons.filled.Work
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -133,6 +115,90 @@ val PresetColors = listOf(
     Color(0xFF90A4AE)  // Blue Grey
 )
 
+class CountdownReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        when (intent.action) {
+            "com.daverbooks.countdown.ACTION_COUNTDOWN_FINISHED" -> {
+                val name = intent.getStringExtra("countdown_name") ?: "A countdown"
+                val id = intent.getLongExtra("countdown_id", 0L)
+                triggerNotification(context, name, id)
+            }
+            Intent.ACTION_BOOT_COMPLETED -> {
+                // Rescheduling logic would go here in a production app with a database.
+            }
+        }
+    }
+
+    private fun triggerNotification(context: Context, name: String, id: Long) {
+        val builder = NotificationCompat.Builder(context, "COUNTDOWN_CHANNEL")
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setContentTitle("Countdown Finished!")
+            .setContentText("$name has reached zero.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(id.toInt(), builder.build())
+    }
+}
+
+private fun scheduleAlarm(context: Context, countdown: Countdown) {
+    val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (!alarmManager.canScheduleExactAlarms()) {
+            Toast.makeText(context, "Please grant permission to schedule exact alarms.", Toast.LENGTH_LONG).show()
+            try {
+                context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+            } catch (e: Exception) {
+                // Activity not found
+            }
+            return
+        }
+    }
+
+    val intent = Intent(context, CountdownReceiver::class.java).apply {
+        action = "com.daverbooks.countdown.ACTION_COUNTDOWN_FINISHED"
+        putExtra("countdown_name", countdown.name)
+        putExtra("countdown_id", countdown.id)
+    }
+    
+    val pendingIntent = PendingIntent.getBroadcast(
+        context, 
+        countdown.id.toInt(), 
+        intent, 
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+
+    val triggerTime = countdown.targetDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    
+    try {
+        alarmManager.setExactAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            triggerTime,
+            pendingIntent
+        )
+    } catch (e: SecurityException) {
+        Toast.makeText(context, "Exact alarm permission denied.", Toast.LENGTH_SHORT).show()
+    }
+}
+
+private fun cancelAlarm(context: Context, countdown: Countdown) {
+    val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    val intent = Intent(context, CountdownReceiver::class.java).apply {
+        action = "com.daverbooks.countdown.ACTION_COUNTDOWN_FINISHED"
+    }
+    val pendingIntent = PendingIntent.getBroadcast(
+        context, 
+        countdown.id.toInt(), 
+        intent, 
+        PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+    )
+    if (pendingIntent != null) {
+        alarmManager.cancel(pendingIntent)
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -162,23 +228,9 @@ private fun createNotificationChannel(context: Context) {
         val channel = NotificationChannel("COUNTDOWN_CHANNEL", name, importance).apply {
             description = descriptionText
         }
-        val notificationManager: NotificationManager =
-            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
     }
-}
-
-private fun triggerNotification(context: Context, countdown: Countdown) {
-    val builder = NotificationCompat.Builder(context, "COUNTDOWN_CHANNEL")
-        .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-        .setContentTitle("Countdown Finished!")
-        .setContentText("${countdown.name} has reached zero.")
-        .setPriority(NotificationCompat.PRIORITY_HIGH)
-        .setAutoCancel(true)
-
-    val notificationManager: NotificationManager =
-        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    notificationManager.notify(countdown.id.toInt(), builder.build())
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -189,7 +241,7 @@ fun CountdownApp(
     isDarkMode: Boolean,
     onDarkModeChange: (Boolean) -> Unit
 ) {
-    val currentContext = LocalContext.current
+    val context = LocalContext.current
     var countdowns by remember { mutableStateOf(listOf<Countdown>()) }
     
     var showAddDialog by remember { mutableStateOf(false) }
@@ -200,6 +252,20 @@ fun CountdownApp(
     
     var currentSortOption by remember { mutableStateOf(SortOption.TARGET_DATE) }
     var isAscending by remember { mutableStateOf(false) }
+
+    val notificationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            Toast.makeText(context, "Notification permission denied", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     val displayCountdowns = remember(countdowns, currentSortOption, isAscending) {
         val baseSorted = when (currentSortOption) {
@@ -224,22 +290,9 @@ fun CountdownApp(
         }
     }
 
-    LaunchedEffect(currentTime) {
-        countdowns.forEach { countdown ->
-            if (countdown.isNotificationEnabled && !countdown.hasNotified) {
-                if (Duration.between(currentTime, countdown.targetDateTime).isNegative) {
-                    triggerNotification(currentContext, countdown)
-                    countdowns = countdowns.map { 
-                        if (it.id == countdown.id) it.copy(hasNotified = true) else it 
-                    }
-                }
-            }
-        }
-    }
-
     LaunchedEffect(Unit) {
         val now = LocalDateTime.now()
-        countdowns = listOf(
+        val initialCountdowns = listOf(
             Countdown(1, "Long Countdown", "", LocalDateTime.of(2026, 7, 10, 17, 0, 0), now, PresetColors[0], isNotificationEnabled = true),
             Countdown(2, "Day Plus", "", now.plusDays(1).plusHours(1).plusMinutes(1).plusSeconds(1), now, PresetColors[5], isFavorite = true),
             Countdown(3, "Hour Plus", "", now.plusHours(1).plusMinutes(1).plusSeconds(1), now, PresetColors[9], isNotificationEnabled = true),
@@ -252,6 +305,12 @@ fun CountdownApp(
             Countdown(10, "Summer Solstice", "Longest day of the year", LocalDateTime.of(now.year + if (now.monthValue > 6 || (now.monthValue == 6 && now.dayOfMonth >= 21)) 1 else 0, 6, 21, 0, 0), now, PresetColors[11], patternType = PatternType.SOLSTICE),
             Countdown(11, "Christmas", "Merry Christmas!", LocalDateTime.of(now.year + if (now.monthValue == 12 && now.dayOfMonth >= 25) 1 else 0, 12, 25, 0, 0), now, PresetColors[0], patternType = PatternType.CHRISTMAS)
         )
+        countdowns = initialCountdowns
+        initialCountdowns.forEach { 
+            if (it.isNotificationEnabled && it.targetDateTime.isAfter(now)) {
+                scheduleAlarm(context, it)
+            }
+        }
     }
 
     Scaffold(
@@ -372,6 +431,7 @@ fun CountdownApp(
                                             swipedCountdownToDelete = countdown
                                             false
                                         } else {
+                                            cancelAlarm(context, countdown)
                                             countdowns = countdowns.filter { it.id != countdown.id }
                                             true
                                         }
@@ -438,6 +498,9 @@ fun CountdownApp(
                         isFavorite = isFavorite
                     )
                     countdowns = countdowns + newCountdown
+                    if (isNotificationEnabled) {
+                        scheduleAlarm(context, newCountdown)
+                    }
                     showAddDialog = false
                 }
             )
@@ -466,21 +529,28 @@ fun CountdownApp(
                 initialCountdown = countdown,
                 onDismiss = { editingCountdown = null },
                 onConfirm = { name, description, dateTime, color, isNotificationEnabled, patternType, isFavorite ->
+                    val updatedCountdown = countdown.copy(
+                        name = name, 
+                        description = description, 
+                        targetDateTime = dateTime, 
+                        color = color,
+                        isNotificationEnabled = isNotificationEnabled,
+                        patternType = patternType,
+                        isFavorite = isFavorite,
+                        hasNotified = if (countdown.targetDateTime != dateTime) false else countdown.hasNotified
+                    )
                     countdowns = countdowns.map {
-                        if (it.id == countdown.id) it.copy(
-                            name = name, 
-                            description = description, 
-                            targetDateTime = dateTime, 
-                            color = color,
-                            isNotificationEnabled = isNotificationEnabled,
-                            patternType = patternType,
-                            isFavorite = isFavorite,
-                            hasNotified = if (it.targetDateTime != dateTime) false else it.hasNotified
-                        ) else it
+                        if (it.id == countdown.id) updatedCountdown else it
+                    }
+                    if (isNotificationEnabled) {
+                        scheduleAlarm(context, updatedCountdown)
+                    } else {
+                        cancelAlarm(context, countdown)
                     }
                     editingCountdown = null
                 },
                 onDelete = {
+                    cancelAlarm(context, countdown)
                     countdowns = countdowns.filter { it.id != countdown.id }
                     editingCountdown = null
                 }
@@ -494,6 +564,7 @@ fun CountdownApp(
                 text = { Text("Are you sure you want to delete the running countdown \"${countdown.name}\"?") },
                 confirmButton = {
                     TextButton(onClick = {
+                        cancelAlarm(context, countdown)
                         countdowns = countdowns.filter { it.id != countdown.id }
                         swipedCountdownToDelete = null
                     }) {
