@@ -55,6 +55,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import androidx.core.app.NotificationCompat
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.*
+import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -62,13 +65,75 @@ import androidx.room.*
 import com.daverbooks.countdown.ui.theme.MyCountDownTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import java.io.IOException
 import java.time.*
 import java.time.format.DateTimeFormatter
 import java.util.Collections
 import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
+
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+
+object PreferencesKeys {
+    val APP_TITLE = stringPreferencesKey("app_title")
+    val DARK_MODE = booleanPreferencesKey("dark_mode")
+    val SORT_OPTION = stringPreferencesKey("sort_option")
+    val IS_ASCENDING = booleanPreferencesKey("is_ascending")
+}
+
+data class UserSettings(
+    val appTitle: String,
+    val isDarkMode: Boolean,
+    val sortOption: SortOption,
+    val isAscending: Boolean
+)
+
+class SettingsRepository(private val dataStore: DataStore<Preferences>) {
+    val userSettingsFlow: Flow<UserSettings> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            UserSettings(
+                appTitle = preferences[PreferencesKeys.APP_TITLE] ?: "My Countdowns",
+                isDarkMode = preferences[PreferencesKeys.DARK_MODE] ?: false,
+                sortOption = SortOption.valueOf(preferences[PreferencesKeys.SORT_OPTION] ?: SortOption.TARGET_DATE.name),
+                isAscending = preferences[PreferencesKeys.IS_ASCENDING] ?: false
+            )
+        }
+
+    suspend fun updateAppTitle(title: String) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.APP_TITLE] = title
+        }
+    }
+
+    suspend fun updateDarkMode(isDarkMode: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.DARK_MODE] = isDarkMode
+        }
+    }
+
+    suspend fun updateSortOption(sortOption: SortOption) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.SORT_OPTION] = sortOption.name
+        }
+    }
+
+    suspend fun updateIsAscending(isAscending: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.IS_ASCENDING] = isAscending
+        }
+    }
+}
 
 enum class PatternType {
     NONE, BIRTHDAY, RETIREMENT, VALENTINE, ST_PATRICK, SOLSTICE, CHRISTMAS
@@ -277,8 +342,10 @@ private fun cancelAlarm(context: Context, countdown: Countdown) {
 class CountdownViewModel(application: Application) : AndroidViewModel(application) {
     private val db = CountdownDatabase.getDatabase(application)
     private val dao = db.countdownDao()
+    private val repository = SettingsRepository(application.dataStore)
 
     val countdowns = dao.getAllCountdowns()
+    val userSettings = repository.userSettingsFlow
 
     fun addCountdown(name: String, description: String, dateTime: LocalDateTime, color: Color, isNotificationEnabled: Boolean, patternType: PatternType, isFavorite: Boolean) {
         viewModelScope.launch {
@@ -332,6 +399,22 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
             dao.updateAll(newList)
         }
     }
+
+    fun updateAppTitle(title: String) {
+        viewModelScope.launch { repository.updateAppTitle(title) }
+    }
+
+    fun updateDarkMode(isDarkMode: Boolean) {
+        viewModelScope.launch { repository.updateDarkMode(isDarkMode) }
+    }
+
+    fun updateSortOption(sortOption: SortOption) {
+        viewModelScope.launch { repository.updateSortOption(sortOption) }
+    }
+
+    fun updateIsAscending(isAscending: Boolean) {
+        viewModelScope.launch { repository.updateIsAscending(isAscending) }
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -340,15 +423,15 @@ class MainActivity : ComponentActivity() {
         createNotificationChannel(this)
         enableEdgeToEdge()
         setContent {
-            var appTitle by remember { mutableStateOf("My Countdowns") }
-            var isDarkMode by remember { mutableStateOf(false) }
+            val viewModel: CountdownViewModel = viewModel()
+            val userSettings by viewModel.userSettings.collectAsState(
+                initial = UserSettings("My Countdowns", false, SortOption.TARGET_DATE, false)
+            )
             
-            MyCountDownTheme(darkTheme = isDarkMode) {
+            MyCountDownTheme(darkTheme = userSettings.isDarkMode) {
                 CountdownApp(
-                    appTitle = appTitle,
-                    onTitleChange = { appTitle = it },
-                    isDarkMode = isDarkMode,
-                    onDarkModeChange = { isDarkMode = it }
+                    userSettings = userSettings,
+                    viewModel = viewModel
                 )
             }
         }
@@ -371,11 +454,8 @@ private fun createNotificationChannel(context: Context) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CountdownApp(
-    appTitle: String,
-    onTitleChange: (String) -> Unit,
-    isDarkMode: Boolean,
-    onDarkModeChange: (Boolean) -> Unit,
-    viewModel: CountdownViewModel = viewModel()
+    userSettings: UserSettings,
+    viewModel: CountdownViewModel
 ) {
     val context = LocalContext.current
     val countdowns by viewModel.countdowns.collectAsState(initial = emptyList())
@@ -385,9 +465,6 @@ fun CountdownApp(
     var showHelpDialog by remember { mutableStateOf(false) }
     var editingCountdown by remember { mutableStateOf<Countdown?>(null) }
     var swipedCountdownToDelete by remember { mutableStateOf<Countdown?>(null) }
-    
-    var currentSortOption by remember { mutableStateOf(SortOption.TARGET_DATE) }
-    var isAscending by remember { mutableStateOf(false) }
 
     val notificationLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -403,16 +480,16 @@ fun CountdownApp(
         }
     }
 
-    val displayCountdowns = remember(countdowns, currentSortOption, isAscending) {
-        val baseSorted = when (currentSortOption) {
+    val displayCountdowns = remember(countdowns, userSettings.sortOption, userSettings.isAscending) {
+        val baseSorted = when (userSettings.sortOption) {
             SortOption.TARGET_DATE -> countdowns.sortedBy { it.targetDateTime }
             SortOption.NAME -> countdowns.sortedBy { it.name.lowercase() }
             SortOption.CREATED_AT -> countdowns.sortedBy { it.createdAt }
             SortOption.MANUAL -> countdowns.sortedBy { it.manualOrder }
         }
-        val finalSorted = if (isAscending || currentSortOption == SortOption.MANUAL) baseSorted else baseSorted.reversed()
+        val finalSorted = if (userSettings.isAscending || userSettings.sortOption == SortOption.MANUAL) baseSorted else baseSorted.reversed()
         
-        if (currentSortOption == SortOption.MANUAL) {
+        if (userSettings.sortOption == SortOption.MANUAL) {
             finalSorted
         } else {
             finalSorted.sortedWith(compareByDescending { it.isFavorite })
@@ -430,7 +507,7 @@ fun CountdownApp(
         modifier = Modifier.fillMaxSize(),
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(appTitle) },
+                title = { Text(userSettings.appTitle) },
                 navigationIcon = {
                     Row {
                         IconButton(onClick = { showSettingsDialog = true }) {
@@ -451,7 +528,7 @@ fun CountdownApp(
                             expanded = showSortMenu,
                             onDismissRequest = { showSortMenu = false }
                         ) {
-                            if (currentSortOption != SortOption.MANUAL) {
+                            if (userSettings.sortOption != SortOption.MANUAL) {
                                 DropdownMenuItem(
                                     text = {
                                         Row(
@@ -461,13 +538,13 @@ fun CountdownApp(
                                         ) {
                                             Text("Ascending")
                                             Switch(
-                                                checked = isAscending,
-                                                onCheckedChange = { isAscending = it },
+                                                checked = userSettings.isAscending,
+                                                onCheckedChange = { viewModel.updateIsAscending(it) },
                                                 modifier = Modifier.scale(0.75f)
                                             )
                                         }
                                     },
-                                    onClick = { isAscending = !isAscending }
+                                    onClick = { viewModel.updateIsAscending(!userSettings.isAscending) }
                                 )
                                 HorizontalDivider()
                             }
@@ -475,11 +552,11 @@ fun CountdownApp(
                                 DropdownMenuItem(
                                     text = { Text(option.displayName) },
                                     onClick = {
-                                        currentSortOption = option
+                                        viewModel.updateSortOption(option)
                                         showSortMenu = false
                                     },
                                     trailingIcon = {
-                                        if (currentSortOption == option) {
+                                        if (userSettings.sortOption == option) {
                                             Icon(Icons.Default.Check, contentDescription = null)
                                         }
                                     }
@@ -530,7 +607,7 @@ fun CountdownApp(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .dragContainer(dragDropState, currentSortOption == SortOption.MANUAL),
+                        .dragContainer(dragDropState, userSettings.sortOption == SortOption.MANUAL),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -580,8 +657,8 @@ fun CountdownApp(
                                     currentTime = currentTime,
                                     onEdit = { editingCountdown = countdown },
                                     onFavoriteToggle = { viewModel.toggleFavorite(countdown) },
-                                    showDragHandle = currentSortOption == SortOption.MANUAL,
-                                    isDarkMode = isDarkMode
+                                    showDragHandle = userSettings.sortOption == SortOption.MANUAL,
+                                    isDarkMode = userSettings.isDarkMode
                                 )
                             }
                         }
@@ -603,12 +680,12 @@ fun CountdownApp(
 
         if (showSettingsDialog) {
             SettingsDialog(
-                currentTitle = appTitle,
-                isDarkMode = isDarkMode,
+                currentTitle = userSettings.appTitle,
+                isDarkMode = userSettings.isDarkMode,
                 onDismiss = { showSettingsDialog = false },
                 onSave = { newTitle, newDarkMode ->
-                    onTitleChange(newTitle)
-                    onDarkModeChange(newDarkMode)
+                    viewModel.updateAppTitle(newTitle)
+                    viewModel.updateDarkMode(newDarkMode)
                     showSettingsDialog = false
                 }
             )
