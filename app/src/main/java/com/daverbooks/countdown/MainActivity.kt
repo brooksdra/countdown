@@ -1,19 +1,14 @@
 package com.daverbooks.countdown
 
-import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -29,7 +24,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -52,13 +46,13 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Redeem
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.*
@@ -66,25 +60,23 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import com.daverbooks.countdown.ui.theme.MyCountDownTheme
 import kotlinx.coroutines.delay
 import java.time.Duration
@@ -111,7 +103,8 @@ data class Countdown(
     val color: Color = Color.Gray,
     val isNotificationEnabled: Boolean = false,
     val hasNotified: Boolean = false,
-    val patternType: PatternType = PatternType.NONE
+    val patternType: PatternType = PatternType.NONE,
+    val isFavorite: Boolean = false
 )
 
 enum class SortOption(val displayName: String) {
@@ -196,6 +189,7 @@ fun CountdownApp(
     isDarkMode: Boolean,
     onDarkModeChange: (Boolean) -> Unit
 ) {
+    val currentContext = LocalContext.current
     var countdowns by remember { mutableStateOf(listOf<Countdown>()) }
     
     var showAddDialog by remember { mutableStateOf(false) }
@@ -205,31 +199,21 @@ fun CountdownApp(
     var swipedCountdownToDelete by remember { mutableStateOf<Countdown?>(null) }
     
     var currentSortOption by remember { mutableStateOf(SortOption.TARGET_DATE) }
-    var isAscending by remember { mutableStateOf(true) }
-
-    val context = LocalContext.current
-    
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { _ -> }
-
-    LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-    }
+    var isAscending by remember { mutableStateOf(false) }
 
     val displayCountdowns = remember(countdowns, currentSortOption, isAscending) {
+        val baseSorted = when (currentSortOption) {
+            SortOption.TARGET_DATE -> countdowns.sortedBy { it.targetDateTime }
+            SortOption.NAME -> countdowns.sortedBy { it.name.lowercase() }
+            SortOption.CREATED_AT -> countdowns.sortedBy { it.createdAt }
+            SortOption.MANUAL -> countdowns
+        }
+        val finalSorted = if (isAscending || currentSortOption == SortOption.MANUAL) baseSorted else baseSorted.reversed()
+        
         if (currentSortOption == SortOption.MANUAL) {
-            countdowns
+            finalSorted
         } else {
-            val sorted = when (currentSortOption) {
-                SortOption.TARGET_DATE -> countdowns.sortedBy { it.targetDateTime }
-                SortOption.NAME -> countdowns.sortedBy { it.name.lowercase() }
-                SortOption.CREATED_AT -> countdowns.sortedBy { it.createdAt }
-                SortOption.MANUAL -> countdowns
-            }
-            if (isAscending) sorted else sorted.reversed()
+            finalSorted.sortedWith(compareByDescending { it.isFavorite })
         }
     }
 
@@ -244,7 +228,7 @@ fun CountdownApp(
         countdowns.forEach { countdown ->
             if (countdown.isNotificationEnabled && !countdown.hasNotified) {
                 if (Duration.between(currentTime, countdown.targetDateTime).isNegative) {
-                    triggerNotification(context, countdown)
+                    triggerNotification(currentContext, countdown)
                     countdowns = countdowns.map { 
                         if (it.id == countdown.id) it.copy(hasNotified = true) else it 
                     }
@@ -257,13 +241,13 @@ fun CountdownApp(
         val now = LocalDateTime.now()
         countdowns = listOf(
             Countdown(1, "Long Countdown", "", LocalDateTime.of(2026, 7, 10, 17, 0, 0), now, PresetColors[0], isNotificationEnabled = true),
-            Countdown(2, "Day Plus", "", now.plusDays(1).plusHours(1).plusMinutes(1).plusSeconds(1), now, PresetColors[5]),
+            Countdown(2, "Day Plus", "", now.plusDays(1).plusHours(1).plusMinutes(1).plusSeconds(1), now, PresetColors[5], isFavorite = true),
             Countdown(3, "Hour Plus", "", now.plusHours(1).plusMinutes(1).plusSeconds(1), now, PresetColors[9], isNotificationEnabled = true),
             Countdown(4, "Minute Plus", "This is a description that will be longer than one line to test the expansion logic.", now.plusMinutes(1).plusSeconds(1), now, PresetColors[12]),
             Countdown(5, "Minute Ago", "", now.minusMinutes(1), now, PresetColors[15]),
             Countdown(6, "Dad's Birthday", "Celebrating another great year!", now.plusMonths(2), now, PresetColors[1], patternType = PatternType.BIRTHDAY),
             Countdown(7, "Retirement Party", "Enjoy your free time!", now.plusYears(1), now, PresetColors[14], patternType = PatternType.RETIREMENT),
-            Countdown(8, "Valentine's Day", "Lots of love", LocalDateTime.of(now.year + if (now.monthValue > 2 || (now.monthValue == 2 && now.dayOfMonth >= 14)) 1 else 0, 2, 14, 0, 0), now, PresetColors[1], patternType = PatternType.VALENTINE),
+            Countdown(8, "Valentine's Day", "Lots of love", LocalDateTime.of(now.year + if (now.monthValue > 2 || (now.monthValue == 2 && now.dayOfMonth >= 14)) 1 else 0, 2, 14, 0, 0), now, PresetColors[1], patternType = PatternType.VALENTINE, isFavorite = true),
             Countdown(9, "St. Patrick's Day", "Luck of the Irish", LocalDateTime.of(now.year + if (now.monthValue > 3 || (now.monthValue == 3 && now.dayOfMonth >= 17)) 1 else 0, 3, 17, 0, 0), now, PresetColors[9], patternType = PatternType.ST_PATRICK),
             Countdown(10, "Summer Solstice", "Longest day of the year", LocalDateTime.of(now.year + if (now.monthValue > 6 || (now.monthValue == 6 && now.dayOfMonth >= 21)) 1 else 0, 6, 21, 0, 0), now, PresetColors[11], patternType = PatternType.SOLSTICE),
             Countdown(11, "Christmas", "Merry Christmas!", LocalDateTime.of(now.year + if (now.monthValue == 12 && now.dayOfMonth >= 25) 1 else 0, 12, 25, 0, 0), now, PresetColors[0], patternType = PatternType.CHRISTMAS)
@@ -286,14 +270,6 @@ fun CountdownApp(
                     }
                 },
                 actions = {
-                    if (currentSortOption != SortOption.MANUAL) {
-                        IconButton(onClick = { isAscending = !isAscending }) {
-                            Icon(
-                                if (isAscending) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                contentDescription = "Toggle Sort Direction"
-                            )
-                        }
-                    }
                     var showSortMenu by remember { mutableStateOf(false) }
                     Box {
                         IconButton(onClick = { showSortMenu = true }) {
@@ -303,6 +279,26 @@ fun CountdownApp(
                             expanded = showSortMenu,
                             onDismissRequest = { showSortMenu = false }
                         ) {
+                            if (currentSortOption != SortOption.MANUAL) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("Ascending")
+                                            Switch(
+                                                checked = isAscending,
+                                                onCheckedChange = { isAscending = it },
+                                                modifier = Modifier.scale(0.75f)
+                                            )
+                                        }
+                                    },
+                                    onClick = { isAscending = !isAscending }
+                                )
+                                HorizontalDivider()
+                            }
                             SortOption.entries.forEach { option ->
                                 DropdownMenuItem(
                                     text = { Text(option.displayName) },
@@ -389,18 +385,15 @@ fun CountdownApp(
                                 state = dismissState,
                                 enableDismissFromStartToEnd = false,
                                 backgroundContent = {
-                                    val color = when (dismissState.dismissDirection) {
-                                        SwipeToDismissBoxValue.EndToStart -> Color.Red
-                                        else -> Color.Transparent
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(color, MaterialTheme.shapes.medium)
-                                            .padding(horizontal = 20.dp),
-                                        contentAlignment = Alignment.CenterEnd
-                                    ) {
-                                        if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
+                                    val direction = dismissState.dismissDirection
+                                    if (direction == SwipeToDismissBoxValue.EndToStart) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(Color.Red, MaterialTheme.shapes.medium)
+                                                .padding(horizontal = 20.dp),
+                                            contentAlignment = Alignment.CenterEnd
+                                        ) {
                                             Icon(
                                                 Icons.Default.Delete,
                                                 contentDescription = "Delete",
@@ -414,6 +407,11 @@ fun CountdownApp(
                                     countdown = countdown,
                                     currentTime = currentTime,
                                     onEdit = { editingCountdown = countdown },
+                                    onFavoriteToggle = {
+                                        countdowns = countdowns.map { 
+                                            if (it.id == countdown.id) it.copy(isFavorite = !it.isFavorite) else it
+                                        }
+                                    },
                                     showDragHandle = currentSortOption == SortOption.MANUAL,
                                     isDarkMode = isDarkMode
                                 )
@@ -428,7 +426,7 @@ fun CountdownApp(
             CountdownDialog(
                 title = "Add New Countdown",
                 onDismiss = { showAddDialog = false },
-                onConfirm = { name, description, dateTime, color, isNotificationEnabled, patternType ->
+                onConfirm = { name, description, dateTime, color, isNotificationEnabled, patternType, isFavorite ->
                     val newCountdown = Countdown(
                         id = System.currentTimeMillis(),
                         name = name,
@@ -436,7 +434,8 @@ fun CountdownApp(
                         targetDateTime = dateTime,
                         color = color,
                         isNotificationEnabled = isNotificationEnabled,
-                        patternType = patternType
+                        patternType = patternType,
+                        isFavorite = isFavorite
                     )
                     countdowns = countdowns + newCountdown
                     showAddDialog = false
@@ -466,7 +465,7 @@ fun CountdownApp(
                 title = "Edit Countdown",
                 initialCountdown = countdown,
                 onDismiss = { editingCountdown = null },
-                onConfirm = { name, description, dateTime, color, isNotificationEnabled, patternType ->
+                onConfirm = { name, description, dateTime, color, isNotificationEnabled, patternType, isFavorite ->
                     countdowns = countdowns.map {
                         if (it.id == countdown.id) it.copy(
                             name = name, 
@@ -475,6 +474,7 @@ fun CountdownApp(
                             color = color,
                             isNotificationEnabled = isNotificationEnabled,
                             patternType = patternType,
+                            isFavorite = isFavorite,
                             hasNotified = if (it.targetDateTime != dateTime) false else it.hasNotified
                         ) else it
                     }
@@ -579,8 +579,8 @@ fun HelpDialog(onDismiss: () -> Unit) {
                 Text("1. Adding Timers", fontWeight = FontWeight.SemiBold)
                 Text("Tap the '+' button at the bottom right to create a new countdown. You can set a name, description, date, time, and choose a color or special theme.")
                 
-                Text("2. Quick Add", fontWeight = FontWeight.SemiBold)
-                Text("Use the '+1 Hour', '+1 Day', or '+1 Week' chips in the Add dialog to quickly advance the target time.")
+                Text("2. Favorites", fontWeight = FontWeight.SemiBold)
+                Text("Tap the Star icon on any card to make it a favorite. Favorites will always float to the top of the list. Note: Favorites are hidden when using Manual sorting.")
                 
                 Text("3. Editing", fontWeight = FontWeight.SemiBold)
                 Text("Tap the 'Edit' pencil icon on any card to change its details or delete it permanently.")
@@ -589,12 +589,9 @@ fun HelpDialog(onDismiss: () -> Unit) {
                 Text("Swipe any card from right-to-left to delete it. Running timers will ask for confirmation first.")
                 
                 Text("5. Reordering", fontWeight = FontWeight.SemiBold)
-                Text("Select 'Manual' from the Sort Options menu (top right), then long-press and drag any card by its handle to reorder the list.")
+                Text("Select 'Manual' from the Sort Options menu (top right), then long-press and drag any card by its handle (on the left) to reorder the list.")
                 
-                Text("6. Expansion", fontWeight = FontWeight.SemiBold)
-                Text("Tap on a card to expand or collapse its description.")
-                
-                Text("7. Settings", fontWeight = FontWeight.SemiBold)
+                Text("6. Settings", fontWeight = FontWeight.SemiBold)
                 Text("Use the sprocket icon (top left) to change the app title or toggle Dark Mode.")
             }
         },
@@ -607,7 +604,14 @@ fun HelpDialog(onDismiss: () -> Unit) {
 }
 
 @Composable
-fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -> Unit, showDragHandle: Boolean = false, isDarkMode: Boolean = false) {
+fun CountdownCard(
+    countdown: Countdown, 
+    currentTime: LocalDateTime, 
+    onEdit: () -> Unit, 
+    onFavoriteToggle: () -> Unit,
+    showDragHandle: Boolean = false, 
+    isDarkMode: Boolean = false
+) {
     var expanded by remember { mutableStateOf(false) }
     val duration = Duration.between(currentTime, countdown.targetDateTime)
     val isRunning = !duration.isNegative
@@ -641,6 +645,30 @@ fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -
                 HolidayPattern(countdown.patternType)
             }
             
+            if (showDragHandle) {
+                Icon(
+                    Icons.Default.Menu,
+                    contentDescription = "Drag to reorder",
+                    tint = contentColor,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(12.dp)
+                        .size(24.dp)
+                )
+            } else {
+                IconButton(
+                    onClick = onFavoriteToggle,
+                    modifier = Modifier.align(Alignment.TopStart)
+                ) {
+                    Icon(
+                        if (countdown.isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
+                        contentDescription = "Favorite",
+                        tint = if (countdown.isFavorite) Color.Yellow else contentColor.copy(alpha = 0.7f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
             Row(
                 modifier = Modifier.align(Alignment.TopEnd),
                 verticalAlignment = Alignment.CenterVertically
@@ -655,14 +683,6 @@ fun CountdownCard(countdown: Countdown, currentTime: LocalDateTime, onEdit: () -
                 }
                 IconButton(onClick = onEdit) {
                     Icon(Icons.Default.Edit, contentDescription = "Edit", tint = contentColor)
-                }
-                if (showDragHandle) {
-                    Icon(
-                        Icons.Default.Menu,
-                        contentDescription = "Drag to reorder",
-                        tint = contentColor,
-                        modifier = Modifier.padding(end = 12.dp)
-                    )
                 }
             }
 
@@ -850,7 +870,7 @@ fun CountdownDialog(
     title: String,
     initialCountdown: Countdown? = null,
     onDismiss: () -> Unit,
-    onConfirm: (String, String, LocalDateTime, Color, Boolean, PatternType) -> Unit,
+    onConfirm: (String, String, LocalDateTime, Color, Boolean, PatternType, Boolean) -> Unit,
     onDelete: (() -> Unit)? = null
 ) {
     var name by remember { mutableStateOf(initialCountdown?.name ?: "") }
@@ -858,6 +878,7 @@ fun CountdownDialog(
     var selectedColor by remember { mutableStateOf(initialCountdown?.color ?: PresetColors[0]) }
     var isNotificationEnabled by remember { mutableStateOf(initialCountdown?.isNotificationEnabled ?: false) }
     var patternType by remember { mutableStateOf(initialCountdown?.patternType ?: PatternType.NONE) }
+    var isFavorite by remember { mutableStateOf(initialCountdown?.isFavorite ?: false) }
     
     val nowDateTime = LocalDateTime.now()
     val initialDateTime = initialCountdown?.targetDateTime ?: nowDateTime
@@ -906,6 +927,27 @@ fun CountdownDialog(
                     ) {
                         Text(selectedTime.format(timeFormatter))
                     }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            if (isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
+                            contentDescription = null,
+                            tint = if (isFavorite) Color.Yellow else LocalContentColor.current,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Mark as Favorite")
+                    }
+                    Switch(
+                        checked = isFavorite,
+                        onCheckedChange = { isFavorite = it }
+                    )
                 }
 
                 Row(
@@ -1021,7 +1063,7 @@ fun CountdownDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    onConfirm(name, description, LocalDateTime.of(selectedDate, selectedTime), selectedColor, isNotificationEnabled, patternType)
+                    onConfirm(name, description, LocalDateTime.of(selectedDate, selectedTime), selectedColor, isNotificationEnabled, patternType, isFavorite)
                 },
                 enabled = name.isNotBlank()
             ) {
