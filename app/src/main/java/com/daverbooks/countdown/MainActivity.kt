@@ -614,7 +614,7 @@ fun CountdownApp(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     itemsIndexed(displayCountdowns, key = { _, item -> item.id }) { index, countdown ->
-                        DraggableItem(dragDropState, index) {
+                        DraggableItem(dragDropState, index) { isDragging ->
                             val dismissState = rememberSwipeToDismissBoxState(
                                 confirmValueChange = { value ->
                                     if (value == SwipeToDismissBoxValue.EndToStart) {
@@ -660,7 +660,8 @@ fun CountdownApp(
                                     onEdit = { editingCountdown = countdown },
                                     onPinToggle = { viewModel.togglePin(countdown) },
                                     showDragHandle = userSettings.sortOption == SortOption.MANUAL,
-                                    isDarkMode = userSettings.isDarkMode
+                                    isDarkMode = userSettings.isDarkMode,
+                                    isDragging = isDragging
                                 )
                             }
                         }
@@ -845,7 +846,8 @@ fun CountdownCard(
     onEdit: () -> Unit, 
     onPinToggle: () -> Unit,
     showDragHandle: Boolean = false, 
-    isDarkMode: Boolean = false
+    isDarkMode: Boolean = false,
+    isDragging: Boolean = false
 ) {
     var expanded by remember { mutableStateOf(false) }
     val duration = Duration.between(currentTime, countdown.targetDateTime)
@@ -867,7 +869,7 @@ fun CountdownCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { expanded = !expanded }
-            .animateContentSize(),
+            .then(if (isDragging) Modifier else Modifier.animateContentSize()),
         elevation = CardDefaults.cardElevation(defaultElevation = if (isRunning) 4.dp else 1.dp),
         colors = CardDefaults.cardColors(
             containerColor = backgroundColor,
