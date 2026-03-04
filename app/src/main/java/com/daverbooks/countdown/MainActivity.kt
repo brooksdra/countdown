@@ -152,7 +152,8 @@ data class Countdown(
     val hasNotified: Boolean = false,
     val patternType: PatternType = PatternType.NONE,
     @ColumnInfo(name = "isFavorite") val isPinned: Boolean = false,
-    val manualOrder: Int = 0
+    val manualOrder: Int = 0,
+    val showTargetDate: Boolean = true
 ) {
     @get:Ignore
     val color: Color get() = Color(colorArgb)
@@ -203,7 +204,7 @@ interface CountdownDao {
     }
 }
 
-@Database(entities = [Countdown::class], version = 1, exportSchema = false)
+@Database(entities = [Countdown::class], version = 2, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class CountdownDatabase : RoomDatabase() {
     abstract fun countdownDao(): CountdownDao
@@ -212,13 +213,21 @@ abstract class CountdownDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: CountdownDatabase? = null
 
+        val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE countdowns ADD COLUMN showTargetDate INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
         fun getDatabase(context: Context): CountdownDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     CountdownDatabase::class.java,
                     "countdown_database"
-                ).build()
+                )
+                .addMigrations(MIGRATION_1_2)
+                .build()
                 INSTANCE = instance
                 instance
             }
@@ -348,7 +357,7 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
     val countdowns = dao.getAllCountdowns()
     val userSettings = repository.userSettingsFlow
 
-    fun addCountdown(name: String, description: String, dateTime: LocalDateTime, color: Color, isNotificationEnabled: Boolean, patternType: PatternType, isPinned: Boolean) {
+    fun addCountdown(name: String, description: String, dateTime: LocalDateTime, color: Color, isNotificationEnabled: Boolean, patternType: PatternType, isPinned: Boolean, showTargetDate: Boolean) {
         viewModelScope.launch {
             val maxOrder = dao.getMaxOrder() ?: 0
             val countdown = Countdown(
@@ -359,7 +368,8 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                 isNotificationEnabled = isNotificationEnabled,
                 patternType = patternType,
                 isPinned = isPinned,
-                manualOrder = maxOrder + 1
+                manualOrder = maxOrder + 1,
+                showTargetDate = showTargetDate
             )
             val id = dao.insert(countdown)
             if (isNotificationEnabled) {
@@ -675,8 +685,8 @@ fun CountdownApp(
             CountdownDialog(
                 title = "Add New Countdown",
                 onDismiss = { showAddDialog = false },
-                onConfirm = { name, description, dateTime, color, isNotificationEnabled, patternType, isPinned ->
-                    viewModel.addCountdown(name, description, dateTime, color, isNotificationEnabled, patternType, isPinned)
+                onConfirm = { name, description, dateTime, color, isNotificationEnabled, patternType, isPinned, showTargetDate ->
+                    viewModel.addCountdown(name, description, dateTime, color, isNotificationEnabled, patternType, isPinned, showTargetDate)
                     showAddDialog = false
                 }
             )
@@ -704,7 +714,7 @@ fun CountdownApp(
                 title = "Edit Countdown",
                 initialCountdown = countdown,
                 onDismiss = { editingCountdown = null },
-                onConfirm = { name, description, dateTime, color, isNotificationEnabled, patternType, isPinned ->
+                onConfirm = { name, description, dateTime, color, isNotificationEnabled, patternType, isPinned, showTargetDate ->
                     viewModel.updateCountdown(countdown.copy(
                         name = name, 
                         description = description, 
@@ -713,6 +723,7 @@ fun CountdownApp(
                         isNotificationEnabled = isNotificationEnabled,
                         patternType = patternType,
                         isPinned = isPinned,
+                        showTargetDate = showTargetDate,
                         hasNotified = if (countdown.targetDateTime != dateTime) false else countdown.hasNotified
                     ))
                     editingCountdown = null
@@ -944,6 +955,18 @@ fun CountdownCard(
                         maxLines = if (expanded) 10 else 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                }
+
+                if (countdown.showTargetDate) {
+                    val targetDateFormatter = DateTimeFormatter.ofPattern("EEEE MMMM d, yyyy")
+                    Text(
+                        text = countdown.targetDateTime.format(targetDateFormatter),
+                        fontSize = 17.sp,
+                        color = contentColor.copy(alpha = 0.9f),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                } else if (countdown.description.isNotBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
@@ -1110,7 +1133,7 @@ fun CountdownDialog(
     title: String,
     initialCountdown: Countdown? = null,
     onDismiss: () -> Unit,
-    onConfirm: (String, String, LocalDateTime, Color, Boolean, PatternType, Boolean) -> Unit,
+    onConfirm: (String, String, LocalDateTime, Color, Boolean, PatternType, Boolean, Boolean) -> Unit,
     onDelete: (() -> Unit)? = null
 ) {
     var name by remember { mutableStateOf(initialCountdown?.name ?: "") }
@@ -1119,6 +1142,7 @@ fun CountdownDialog(
     var isNotificationEnabled by remember { mutableStateOf(initialCountdown?.isNotificationEnabled ?: false) }
     var patternType by remember { mutableStateOf(initialCountdown?.patternType ?: PatternType.NONE) }
     var isPinned by remember { mutableStateOf(initialCountdown?.isPinned ?: false) }
+    var showTargetDate by remember { mutableStateOf(initialCountdown?.showTargetDate ?: true) }
     
     val nowDateTime = LocalDateTime.now()
     val initialDateTime = initialCountdown?.targetDateTime ?: nowDateTime
@@ -1136,7 +1160,10 @@ fun CountdownDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 TextField(
                     value = name,
                     onValueChange = { name = it },
@@ -1187,6 +1214,26 @@ fun CountdownDialog(
                     Switch(
                         checked = isPinned,
                         onCheckedChange = { isPinned = it }
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.CalendarToday,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Show nicely formatted date")
+                    }
+                    Switch(
+                        checked = showTargetDate,
+                        onCheckedChange = { showTargetDate = it }
                     )
                 }
 
@@ -1303,7 +1350,7 @@ fun CountdownDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    onConfirm(name, description, LocalDateTime.of(selectedDate, selectedTime), selectedColor, isNotificationEnabled, patternType, isPinned)
+                    onConfirm(name, description, LocalDateTime.of(selectedDate, selectedTime), selectedColor, isNotificationEnabled, patternType, isPinned, showTargetDate)
                 },
                 enabled = name.isNotBlank()
             ) {
