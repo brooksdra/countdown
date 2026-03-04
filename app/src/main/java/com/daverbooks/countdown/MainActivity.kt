@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -150,7 +151,7 @@ data class Countdown(
     val isNotificationEnabled: Boolean = false,
     val hasNotified: Boolean = false,
     val patternType: PatternType = PatternType.NONE,
-    val isFavorite: Boolean = false,
+    @ColumnInfo(name = "isFavorite") val isPinned: Boolean = false,
     val manualOrder: Int = 0
 ) {
     @get:Ignore
@@ -347,7 +348,7 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
     val countdowns = dao.getAllCountdowns()
     val userSettings = repository.userSettingsFlow
 
-    fun addCountdown(name: String, description: String, dateTime: LocalDateTime, color: Color, isNotificationEnabled: Boolean, patternType: PatternType, isFavorite: Boolean) {
+    fun addCountdown(name: String, description: String, dateTime: LocalDateTime, color: Color, isNotificationEnabled: Boolean, patternType: PatternType, isPinned: Boolean) {
         viewModelScope.launch {
             val maxOrder = dao.getMaxOrder() ?: 0
             val countdown = Countdown(
@@ -357,7 +358,7 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
                 colorArgb = color.toArgb(),
                 isNotificationEnabled = isNotificationEnabled,
                 patternType = patternType,
-                isFavorite = isFavorite,
+                isPinned = isPinned,
                 manualOrder = maxOrder + 1
             )
             val id = dao.insert(countdown)
@@ -385,9 +386,9 @@ class CountdownViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun toggleFavorite(countdown: Countdown) {
+    fun togglePin(countdown: Countdown) {
         viewModelScope.launch {
-            dao.update(countdown.copy(isFavorite = !countdown.isFavorite))
+            dao.update(countdown.copy(isPinned = !countdown.isPinned))
         }
     }
 
@@ -493,7 +494,7 @@ fun CountdownApp(
         if (userSettings.sortOption == SortOption.MANUAL) {
             finalSorted
         } else {
-            finalSorted.sortedWith(compareByDescending { it.isFavorite })
+            finalSorted.sortedWith(compareByDescending { it.isPinned })
         }
     }
 
@@ -657,7 +658,7 @@ fun CountdownApp(
                                     countdown = countdown,
                                     currentTime = currentTime,
                                     onEdit = { editingCountdown = countdown },
-                                    onFavoriteToggle = { viewModel.toggleFavorite(countdown) },
+                                    onPinToggle = { viewModel.togglePin(countdown) },
                                     showDragHandle = userSettings.sortOption == SortOption.MANUAL,
                                     isDarkMode = userSettings.isDarkMode
                                 )
@@ -672,8 +673,8 @@ fun CountdownApp(
             CountdownDialog(
                 title = "Add New Countdown",
                 onDismiss = { showAddDialog = false },
-                onConfirm = { name, description, dateTime, color, isNotificationEnabled, patternType, isFavorite ->
-                    viewModel.addCountdown(name, description, dateTime, color, isNotificationEnabled, patternType, isFavorite)
+                onConfirm = { name, description, dateTime, color, isNotificationEnabled, patternType, isPinned ->
+                    viewModel.addCountdown(name, description, dateTime, color, isNotificationEnabled, patternType, isPinned)
                     showAddDialog = false
                 }
             )
@@ -701,7 +702,7 @@ fun CountdownApp(
                 title = "Edit Countdown",
                 initialCountdown = countdown,
                 onDismiss = { editingCountdown = null },
-                onConfirm = { name, description, dateTime, color, isNotificationEnabled, patternType, isFavorite ->
+                onConfirm = { name, description, dateTime, color, isNotificationEnabled, patternType, isPinned ->
                     viewModel.updateCountdown(countdown.copy(
                         name = name, 
                         description = description, 
@@ -709,7 +710,7 @@ fun CountdownApp(
                         colorArgb = color.toArgb(),
                         isNotificationEnabled = isNotificationEnabled,
                         patternType = patternType,
-                        isFavorite = isFavorite,
+                        isPinned = isPinned,
                         hasNotified = if (countdown.targetDateTime != dateTime) false else countdown.hasNotified
                     ))
                     editingCountdown = null
@@ -813,8 +814,8 @@ fun HelpDialog(onDismiss: () -> Unit) {
                 Text("1. Adding Timers", fontWeight = FontWeight.SemiBold)
                 Text("Tap the '+' button at the bottom right to create a new countdown. You can set a name, description, date, time, and choose a color or special theme.")
                 
-                Text("2. Favorites", fontWeight = FontWeight.SemiBold)
-                Text("Tap the Star icon on any card to make it a favorite. Favorites will always float to the top of the list. Note: Favorites are hidden when using Manual sorting.")
+                Text("2. Pinning", fontWeight = FontWeight.SemiBold)
+                Text("Tap the Pushpin icon on any card to pin it. Pinned items will always float to the top of the list. Note: Pins are hidden when using Manual sorting.")
                 
                 Text("3. Editing", fontWeight = FontWeight.SemiBold)
                 Text("Tap the 'Edit' pencil icon on any card to change its details or delete it permanently.")
@@ -842,7 +843,7 @@ fun CountdownCard(
     countdown: Countdown, 
     currentTime: LocalDateTime, 
     onEdit: () -> Unit, 
-    onFavoriteToggle: () -> Unit,
+    onPinToggle: () -> Unit,
     showDragHandle: Boolean = false, 
     isDarkMode: Boolean = false
 ) {
@@ -891,13 +892,13 @@ fun CountdownCard(
                 )
             } else {
                 IconButton(
-                    onClick = onFavoriteToggle,
+                    onClick = onPinToggle,
                     modifier = Modifier.align(Alignment.TopStart)
                 ) {
                     Icon(
-                        if (countdown.isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
-                        contentDescription = "Favorite",
-                        tint = if (countdown.isFavorite) Color.Yellow else contentColor.copy(alpha = 0.7f),
+                        if (countdown.isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                        contentDescription = "Pin",
+                        tint = if (countdown.isPinned) Color.Yellow else contentColor.copy(alpha = 0.7f),
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -1113,7 +1114,7 @@ fun CountdownDialog(
     var selectedColor by remember { mutableStateOf(initialCountdown?.color ?: PresetColors[0]) }
     var isNotificationEnabled by remember { mutableStateOf(initialCountdown?.isNotificationEnabled ?: false) }
     var patternType by remember { mutableStateOf(initialCountdown?.patternType ?: PatternType.NONE) }
-    var isFavorite by remember { mutableStateOf(initialCountdown?.isFavorite ?: false) }
+    var isPinned by remember { mutableStateOf(initialCountdown?.isPinned ?: false) }
     
     val nowDateTime = LocalDateTime.now()
     val initialDateTime = initialCountdown?.targetDateTime ?: nowDateTime
@@ -1171,17 +1172,17 @@ fun CountdownDialog(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            if (isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
+                            if (isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
                             contentDescription = null,
-                            tint = if (isFavorite) Color.Yellow else LocalContentColor.current,
+                            tint = if (isPinned) Color.Yellow else LocalContentColor.current,
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text("Mark as Favorite")
+                        Text("Pin Countdown")
                     }
                     Switch(
-                        checked = isFavorite,
-                        onCheckedChange = { isFavorite = it }
+                        checked = isPinned,
+                        onCheckedChange = { isPinned = it }
                     )
                 }
 
@@ -1298,7 +1299,7 @@ fun CountdownDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    onConfirm(name, description, LocalDateTime.of(selectedDate, selectedTime), selectedColor, isNotificationEnabled, patternType, isFavorite)
+                    onConfirm(name, description, LocalDateTime.of(selectedDate, selectedTime), selectedColor, isNotificationEnabled, patternType, isPinned)
                 },
                 enabled = name.isNotBlank()
             ) {
