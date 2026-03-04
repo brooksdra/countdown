@@ -655,6 +655,7 @@ fun CountdownApp(
                                 }
                             ) {
                                 CountdownCard(
+                                    modifier = if (isDragging) Modifier else Modifier.animateItem(),
                                     countdown = countdown,
                                     currentTime = currentTime,
                                     onEdit = { editingCountdown = countdown },
@@ -845,6 +846,7 @@ fun CountdownCard(
     currentTime: LocalDateTime, 
     onEdit: () -> Unit, 
     onPinToggle: () -> Unit,
+    modifier: Modifier = Modifier,
     showDragHandle: Boolean = false, 
     isDarkMode: Boolean = false,
     isDragging: Boolean = false
@@ -866,7 +868,7 @@ fun CountdownCard(
     }
 
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable { expanded = !expanded }
             .then(if (isDragging) Modifier else Modifier.animateContentSize()),
@@ -1434,7 +1436,6 @@ class DragDropState(
 ) {
     var draggedDistance by mutableFloatStateOf(0f)
     var draggingItemIndex by mutableStateOf<Int?>(null)
-    var initiallyDraggedElement by mutableStateOf<LazyListItemInfo?>(null)
 
     fun onDragStart(offset: Offset) {
         lazyListState.layoutInfo.visibleItemsInfo
@@ -1442,32 +1443,37 @@ class DragDropState(
                 offset.y.toInt() in item.offset..(item.offset + item.size)
             }?.also {
                 draggingItemIndex = it.index
-                initiallyDraggedElement = it
             }
     }
 
     fun onDragInterrupted() {
         draggingItemIndex = null
-        initiallyDraggedElement = null
         draggedDistance = 0f
     }
 
     fun onDrag(offset: Offset) {
         draggedDistance += offset.y
 
-        val initialElement = initiallyDraggedElement ?: return
-        val startOffset = (initialElement.offset + draggedDistance).toInt()
-        val endOffset = (initialElement.offset + initialElement.size + draggedDistance).toInt()
+        val draggingItem = lazyListState.layoutInfo.visibleItemsInfo
+            .firstOrNull { it.index == draggingItemIndex } ?: return
 
-        val currentElement = lazyListState.layoutInfo.visibleItemsInfo.find { item ->
-            draggingItemIndex != item.index &&
-                    (startOffset in item.offset..item.offset + item.size ||
-                            endOffset in item.offset..item.offset + item.size)
-        }
+        val draggedCenter = draggingItem.offset + draggingItem.size / 2 + draggedDistance
 
-        if (currentElement != null) {
-            onMove(draggingItemIndex!!, currentElement.index)
-            draggingItemIndex = currentElement.index
+        val targetItem = lazyListState.layoutInfo.visibleItemsInfo
+            .filter { it.index != draggingItemIndex && it.index != -1 }
+            .find { item ->
+                val itemMidPoint = item.offset + item.size / 2
+                if (draggingItemIndex!! < item.index) {
+                    draggedCenter > itemMidPoint
+                } else {
+                    draggedCenter < itemMidPoint
+                }
+            }
+
+        if (targetItem != null) {
+            onMove(draggingItemIndex!!, targetItem.index)
+            draggedDistance -= (targetItem.offset - draggingItem.offset)
+            draggingItemIndex = targetItem.index
         }
     }
 }
@@ -1497,13 +1503,13 @@ fun DraggableItem(
 
     Box(
         modifier = Modifier
+            .zIndex(if (dragging) 1f else 0f)
             .graphicsLayer {
                 translationY = if (dragging) dragDropState.draggedDistance else 0f
                 scaleX = if (dragging) 1.05f else 1f
                 scaleY = if (dragging) 1.05f else 1f
                 alpha = if (dragging) 0.8f else 1f
             }
-            .zIndex(if (dragging) 1f else 0f)
     ) {
         content(dragging)
     }

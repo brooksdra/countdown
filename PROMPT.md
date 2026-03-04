@@ -47,3 +47,4 @@
 - [2026-02-22 23:00:00] I just did a gradle update, can you please runn all test and commit this update (Status: COMPLETED)
 - [2026-02-22 23:15:00] Okay, I noticed a bug with the date picker, it appears to be selecting the day before. That is if I pick march 3, the returned date is march 2nd? (Status: COMPLETED)
 - [2026-02-22 23:30:00] Yes please, there is current favorites feature that presents as a star icon in the top left of each countdown card. I'd like the change the name of the feature from "Favorites" to "Pin" and the icon from a start to a pushpin. I do not want any changes the current functionality, just the naming, presentation and jelp documentatoin. (Status: COMPLETED)
+- [2026-02-22 23:45:00] The application has a manual sort arrangement feature. When this is set and the user begins to drag a card, if starts to flash and is hard to control. The page is very jumpy. Please review and correct. (Status: COMPLETED)
