@@ -45,3 +45,4 @@
 - [2026-02-22 22:50:00] Since the favorites doesn't have an affect when in manual sort mode, please hide the favorites and move the sort icon (three bars) to the left in the same spot as favorites icon. (Status: COMPLETED)
 - [2026-02-22 22:55:00] Add a sort ascending/descending switch to the sort menu defaulted to descending. (Status: COMPLETED)
 - [2026-02-22 23:00:00] I just did a gradle update, can you please runn all test and commit this update (Status: COMPLETED)
+- [2026-02-22 23:15:00] Okay, I noticed a bug with the date picker, it appears to be selecting the day before. That is if I pick march 3, the returned date is march 2nd? (Status: COMPLETED)
