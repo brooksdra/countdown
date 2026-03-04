@@ -43,4 +43,5 @@
 - [2026-02-22 22:40:00] Implement a new favorites mechanism so a user can set specific timers as a favorite and if there are one or more favorites they float to the top. (Status: COMPLETED)
 - [2026-02-22 22:45:00] Hide favorites and show drag handles on the left when in manual sort mode. (Status: COMPLETED)
 - [2026-02-22 22:50:00] Since the favorites doesn't have an affect when in manual sort mode, please hide the favorites and move the sort icon (three bars) to the left in the same spot as favorites icon. (Status: COMPLETED)
-- [2026-02-22 22:55:00] Add a sort ascending/descending switch to the sort menu defaulted to descending. (Status: IN_PROGRESS)
+- [2026-02-22 22:55:00] Add a sort ascending/descending switch to the sort menu defaulted to descending. (Status: COMPLETED)
+- [2026-02-22 23:00:00] I just did a gradle update, can you please runn all test and commit this update (Status: COMPLETED)
